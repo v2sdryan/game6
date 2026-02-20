@@ -311,28 +311,28 @@ function createBeast() {
   return { group: g, head, jaw, lw, rw, lC, rC, body, tail }
 }
 
-// ======================== INSTANTIATE ========================
-const soldier = createSoldier(); soldier.group.position.set(-4, 0, 0); scene.add(soldier.group)
-// Store base positions for animation
-soldier.swordGrp._baseRX = -0.2; soldier.swordGrp._baseZ = 0.35
-soldier.spearGrp._baseRX = -0.15; soldier.spearGrp._baseZ = 0.4
-soldier.bowGrp._baseRX = -0.1; soldier.bowGrp._baseZ = 0.3
-updateWeaponVisibility()
-const beast = createBeast(); beast.group.position.set(10, 0, 0); scene.add(beast.group)
-
 // ======================== WEAPONS ========================
 const WEAPONS = [{ name: '劍', dmg: 15, range: 2.8, cd: 0.3 }, { name: '矛', dmg: 20, range: 4.0, cd: 0.5 }, { name: '弓', dmg: 12, range: 12, cd: 0.6 }]
 let curWpn = 0; const wpnEl = document.getElementById('weapon-display')
+let soldier = null
 function switchWpn() {
   curWpn = (curWpn + 1) % WEAPONS.length; wpnEl.textContent = '武器：' + WEAPONS[curWpn].name; sndSwitch()
   updateWeaponVisibility()
 }
 function updateWeaponVisibility() {
-  if (!soldier.weaponModels) return
+  if (!soldier || !soldier.weaponModels) return
   for (let i = 0; i < soldier.weaponModels.length; i++) {
     soldier.weaponModels[i].visible = (i === curWpn)
   }
 }
+
+// ======================== INSTANTIATE ========================
+soldier = createSoldier(); soldier.group.position.set(-4, 0, 0); scene.add(soldier.group)
+soldier.swordGrp._baseRX = -0.2; soldier.swordGrp._baseZ = 0.35
+soldier.spearGrp._baseRX = -0.15; soldier.spearGrp._baseZ = 0.4
+soldier.bowGrp._baseRX = -0.1; soldier.bowGrp._baseZ = 0.3
+updateWeaponVisibility()
+const beast = createBeast(); beast.group.position.set(10, 0, 0); scene.add(beast.group)
 
 const arrowGrp = new THREE.Group(); scene.add(arrowGrp); const arrows = []
 const partGrp = new THREE.Group(); scene.add(partGrp); const parts = []
