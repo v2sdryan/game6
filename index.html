@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>角鬥士 vs 猛獸</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a18; font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif; }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    /* HUD */
+    #ui { position: fixed; top: 0; left: 0; width: 100%; z-index: 10; padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top)); pointer-events: none; }
+    .hp-row { display: flex; gap: 10px; }
+    .hp-group { flex: 1; }
+    .hp-label { color: #ccc; font-size: 11px; margin-bottom: 2px; font-weight: bold; }
+    .hp-label.player { color: #ff6644; }
+    .hp-label.beast { color: #ffcc22; }
+    .hp-bar-bg { width: 100%; height: 14px; background: #222; border-radius: 7px; border: 1.5px solid #444; overflow: hidden; }
+    .hp-bar { height: 100%; border-radius: 6px; transition: width 0.3s; }
+    .hp-bar.player { background: linear-gradient(#ff6644, #cc3322); }
+    .hp-bar.beast { background: linear-gradient(#ffcc22, #cc9900); }
+
+    #wave-display { position: fixed; top: 42px; top: calc(42px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); color: #e8c840; font-size: 15px; font-weight: bold; z-index: 10; pointer-events: none; }
+    #weapon-display { position: fixed; top: 60px; top: calc(60px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); color: #aaa; font-size: 12px; z-index: 10; pointer-events: none; }
+
+    /* Top buttons */
+    .top-btns { position: fixed; top: 8px; top: max(8px, env(safe-area-inset-top)); right: 12px; z-index: 15; display: flex; gap: 6px; }
+    .top-btns button {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 1.5px solid #555; background: rgba(30,30,30,0.85); color: #fff;
+      font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      -webkit-appearance: none; appearance: none;
+    }
+    .top-btns button.off { border-color: #883333; color: #883333; }
+
+    /* Menu */
+    #menu {
+      position: fixed; inset: 0; z-index: 25;
+      background: rgba(10,10,24,0.96);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+      padding: 20px; padding-top: env(safe-area-inset-top);
+    }
+    #menu.hidden { display: none; }
+    #menu h1 { color: #e8c840; font-size: min(36px, 8vw); text-shadow: 0 0 15px rgba(232,200,64,0.3); }
+    #menu p { color: #888; font-size: 13px; }
+    #menu .start-btn {
+      padding: 16px 48px; font-size: 20px; font-weight: bold;
+      background: #cc6633; color: #fff; border: none; border-radius: 12px;
+      -webkit-appearance: none; appearance: none;
+      min-height: 54px; min-width: 200px;
+    }
+    #menu .start-btn:active { background: #ee8844; transform: scale(0.97); }
+    #menu .hint { color: #555; font-size: 11px; text-align: center; line-height: 1.6; margin-top: 8px; }
+
+    /* Overlay */
+    #overlay {
+      position: fixed; inset: 0; display: none; z-index: 20;
+      background: rgba(0,0,0,0.88);
+      flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px;
+    }
+    #overlay.show { display: flex; }
+    #overlay h1 { font-size: min(40px, 10vw); }
+    #overlay h1.win { color: #ffd700; text-shadow: 0 0 15px rgba(255,215,0,0.4); }
+    #overlay h1.lose { color: #cc3333; text-shadow: 0 0 15px rgba(204,51,51,0.4); }
+    #overlay p { color: #aaa; font-size: 14px; }
+    .overlay-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .overlay-btns button {
+      padding: 14px 28px; font-size: 16px; font-weight: bold;
+      color: #fff; border: none; border-radius: 10px;
+      -webkit-appearance: none; appearance: none; min-height: 48px;
+    }
+    .overlay-btns .primary { background: #cc6633; }
+    .overlay-btns .primary:active { background: #ee8844; }
+    .overlay-btns .secondary { background: #444; }
+    .overlay-btns .secondary:active { background: #666; }
+
+    /* Mobile controls - ALWAYS visible */
+    #mobile-controls {
+      position: fixed; bottom: 0; left: 0; width: 100%; z-index: 15;
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
+      display: flex; justify-content: space-between; align-items: flex-end;
+      padding-left: 12px; padding-right: 12px;
+    }
+    .ctrl-left { display: flex; gap: 8px; align-items: flex-end; }
+    .ctrl-right { display: flex; gap: 8px; align-items: flex-end; flex-direction: row-reverse; }
+
+    .m-btn {
+      border-radius: 50%; border: 2.5px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.1); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      user-select: none; -webkit-user-select: none;
+      font-weight: bold; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+    }
+    .m-btn:active, .m-btn.pressed { background: rgba(255,255,255,0.35); border-color: rgba(255,255,255,0.6); }
+
+    /* D-pad buttons */
+    .m-btn.dir { width: 64px; height: 64px; font-size: 22px; }
+    .m-btn.action { width: 72px; height: 72px; font-size: 14px; }
+    .m-btn.action-big { width: 80px; height: 80px; font-size: 16px; border-color: rgba(255,100,50,0.5); background: rgba(255,100,50,0.15); }
+    .m-btn.action-big:active, .m-btn.action-big.pressed { background: rgba(255,100,50,0.4); }
+    .m-btn.small { width: 52px; height: 52px; font-size: 11px; }
+
+    /* Hide keyboard hint on mobile */
+    #controls-hint { position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%); color: #333; font-size: 10px; z-index: 10; pointer-events: none; }
+    @media (pointer: coarse) { #controls-hint { display: none; } }
+    @media (pointer: fine) { #mobile-controls { opacity: 0.3; } #mobile-controls:hover { opacity: 1; } }
+  </style>
+</head>
+<body>
+  <!-- MENU -->
+  <div id="menu">
+    <h1>角鬥士 vs 猛獸</h1>
+    <p>羅馬競技場生存戰</p>
+    <button class="start-btn" id="start-btn">開始遊戲</button>
+    <div class="hint">手機橫向體驗更佳</div>
+  </div>
+
+  <!-- HUD -->
+  <div id="ui">
+    <div class="hp-row">
+      <div class="hp-group"><div class="hp-label player">士兵</div><div class="hp-bar-bg"><div id="player-hp" class="hp-bar player" style="width:100%"></div></div></div>
+      <div class="hp-group"><div class="hp-label beast">猛獸</div><div class="hp-bar-bg"><div id="beast-hp" class="hp-bar beast" style="width:100%"></div></div></div>
+    </div>
+  </div>
+  <div id="wave-display">第 1 波</div>
+  <div id="weapon-display">武器：劍</div>
+  <div class="top-btns">
+    <button id="btn-sound">♫</button>
+    <button id="btn-menu">⌂</button>
+  </div>
+
+  <!-- Game Over -->
+  <div id="overlay">
+    <h1 id="overlay-title"></h1>
+    <p id="overlay-sub"></p>
+    <div class="overlay-btns">
+      <button class="primary" id="btn-restart">重新開始</button>
+      <button class="secondary" id="btn-back">返回主頁</button>
+    </div>
+  </div>
+
+  <!-- Mobile controls -->
+  <div id="mobile-controls">
+    <div class="ctrl-left">
+      <button class="m-btn dir" id="btn-left">◀</button>
+      <button class="m-btn dir" id="btn-right" style="margin-left:4px">▶</button>
+      <button class="m-btn small" id="btn-jump" style="margin-left:8px;margin-bottom:20px">跳</button>
+    </div>
+    <div class="ctrl-right">
+      <button class="m-btn action-big" id="btn-attack">攻擊</button>
+      <button class="m-btn action" id="btn-weapon">換<br>武器</button>
+    </div>
+  </div>
+
+  <div id="controls-hint">← → 移動 | ↑ 跳 | 空格 攻擊 | Q 武器</div>
+
+  <script>
+    // Wire up all button events BEFORE module loads (fixes iOS touch issues)
+    function wireBtn(id, handler) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('click', handler);
+      el.addEventListener('touchend', function(e) { e.preventDefault(); handler(); }, { passive: false });
+    }
+    wireBtn('start-btn', function() { if (window._startGame) window._startGame(); });
+    wireBtn('btn-restart', function() { if (window._restartGame) window._restartGame(); });
+    wireBtn('btn-back', function() { if (window._backToMenu) window._backToMenu(); });
+    wireBtn('btn-sound', function() { if (window._toggleSound) window._toggleSound(); });
+    wireBtn('btn-menu', function() { if (window._backToMenu) window._backToMenu(); });
+  </script>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
