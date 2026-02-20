@@ -30,6 +30,9 @@
     .music-btn:active{background:rgba(255,255,255,0.2)}
     .music-btn.off{border-color:#883333;color:#883333}
     .hint{color:#555;font-size:10px;text-align:center;line-height:1.6;margin-top:8px}
+    .upg-btn{padding:14px 10px;font-size:13px;background:rgba(255,255,255,0.05);color:#ddd;border:2px solid #555;border-radius:12px;cursor:pointer;touch-action:manipulation;-webkit-appearance:none;text-align:center;line-height:1.5;min-height:100px}
+    .upg-btn:active{background:rgba(255,255,255,0.15);transform:scale(0.97)}
+    .upg-desc{color:#888;font-size:10px}
     .sel-btn{padding:14px 20px;font-size:15px;font-weight:bold;background:rgba(255,255,255,0.08);color:#ddd;border:2px solid #555;border-radius:10px;min-width:140px;min-height:50px;cursor:pointer;touch-action:manipulation;-webkit-appearance:none}
     .sel-btn:active{background:rgba(255,255,255,0.2);border-color:#e8c840}
 
@@ -95,7 +98,8 @@
   <div id="ui">
     <div class="hp-row">
       <div class="hp-group"><div class="hp-label player">士兵</div><div class="hp-bar-bg"><div id="player-hp" class="hp-bar player" style="width:100%"></div></div></div>
-      <div class="hp-group"><div class="hp-label beast">猛獸</div><div class="hp-bar-bg"><div id="beast-hp" class="hp-bar beast" style="width:100%"></div></div></div>
+      <div class="hp-group" id="enemy1-grp"><div class="hp-label beast">敵人①</div><div class="hp-bar-bg"><div id="beast-hp" class="hp-bar beast" style="width:100%"></div></div></div>
+      <div class="hp-group" id="enemy2-grp" style="display:none"><div class="hp-label beast">敵人②</div><div class="hp-bar-bg"><div id="beast2-hp" class="hp-bar beast" style="width:100%"></div></div></div>
     </div>
   </div>
   <div id="wave-display">第 1 波</div>
@@ -112,6 +116,35 @@
     <div class="overlay-btns">
       <button class="primary" id="btn-restart">重新開始</button>
       <button class="secondary" id="btn-back">返回主頁</button>
+    </div>
+  </div>
+
+  <!-- UPGRADE SCREEN -->
+  <div id="upgrade-screen" style="display:none;position:fixed;inset:0;z-index:80;background:rgba(0,0,0,0.88);flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px">
+    <div style="color:#ffd700;font-size:min(28px,7vw);font-weight:bold;text-shadow:0 0 10px rgba(255,215,0,0.3)">選擇升級</div>
+    <div style="color:#888;font-size:12px" id="upgrade-wave-info"></div>
+    <div style="color:#666;font-size:11px;margin-bottom:4px" id="upgrade-stats-info"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:340px;width:100%">
+      <button class="upg-btn" data-type="hp" style="border-color:#cc3333">
+        <span style="font-size:24px">❤️</span><br>
+        <b style="color:#cc3333">+25 生命值</b><br>
+        <span class="upg-desc" id="upg-hp-desc"></span>
+      </button>
+      <button class="upg-btn" data-type="atk" style="border-color:#cc8822">
+        <span style="font-size:24px">⚔️</span><br>
+        <b style="color:#cc8822">+15% 攻擊力</b><br>
+        <span class="upg-desc" id="upg-atk-desc"></span>
+      </button>
+      <button class="upg-btn" data-type="def" style="border-color:#2266cc">
+        <span style="font-size:24px">🛡️</span><br>
+        <b style="color:#2266cc">+12% 防禦力</b><br>
+        <span class="upg-desc" id="upg-def-desc"></span>
+      </button>
+      <button class="upg-btn" data-type="agi" style="border-color:#22aa66">
+        <span style="font-size:24px">⚡</span><br>
+        <b style="color:#22aa66">+10% 敏捷度</b><br>
+        <span class="upg-desc" id="upg-agi-desc"></span>
+      </button>
     </div>
   </div>
 
@@ -204,6 +237,16 @@
     wire('btn-menu', backToMenu);
     wire('btn-restart', restartGame);
     wire('btn-back', backToMenu);
+
+    // Upgrade buttons
+    document.querySelectorAll('.upg-btn').forEach(function(btn) {
+      btn.addEventListener('touchstart', function(e) { e.preventDefault(); pickUpgrade(btn.dataset.type); }, { passive: false });
+      btn.addEventListener('click', function() { pickUpgrade(btn.dataset.type); });
+    });
+    function pickUpgrade(type) {
+      if (window._onUpgrade) window._onUpgrade(type);
+      document.getElementById('upgrade-screen').style.display = 'none';
+    }
 
     // Error logging for debug
     window.onerror = function(msg, url, line) {

@@ -409,7 +409,11 @@ const partGrp = new THREE.Group(); scene.add(partGrp); const parts = []
 function spawnP(x, y, z, col, n) { for (let i = 0; i < n; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.06 + Math.random() * 0.04, 4, 4), new THREE.MeshBasicMaterial({ color: col, transparent: true })); m.position.set(x, y, z); partGrp.add(m); parts.push({ mesh: m, vx: (Math.random() - 0.5) * 5, vy: Math.random() * 4 + 1, vz: (Math.random() - 0.5) * 5, life: 0.4 + Math.random() * 0.3 }) } }
 
 // ======================== STATE ========================
-const GY = 0, GRAV = -22, JV = 9, MSPD = 6, BSPD = 4, BDMG = 8, BCSPD = 8
+const GY = 0, GRAV = -22, JV = 9, BASE_MSPD = 6, BSPD = 4, BDMG = 8, BCSPD = 8
+const upgrades = { hp: 0, atk: 0, def: 0, agi: 0 }
+function getATK() { return 1 + upgrades.atk * 0.15 }
+function getDEF() { return Math.max(0.1, 1 - upgrades.def * 0.12) }
+function getMSPD() { return BASE_MSPD * (1 + upgrades.agi * 0.10) }
 function makeEnemySt(x, z) { return { x: x||10, y: 0, z: z||0, hp: 80, mhp: 80, face: -1, st: 'approach', t: 0, hitCD: 0, dir: 0, alive: true } }
 const st = { px: -4, py: 0, pz: 0, pvy: 0, php: 100, pmhp: 100, pFace: 0, atk: false, atkT: 0, pHitCD: 0, atkCD: 0, enemies: [makeEnemySt(10, 0)], wave: 1, over: false, started: false, shake: 0, shakeI: 0, slowMo: 1, battleMode: '1v1', enemyType: 'beast' }
 
@@ -464,19 +468,30 @@ function getMove() {
 // ======================== UI ========================
 const phpEl = document.getElementById('player-hp'), bhpEl = document.getElementById('beast-hp'), waveEl = document.getElementById('wave-display')
 const olEl = document.getElementById('overlay'), olT = document.getElementById('overlay-title'), olS = document.getElementById('overlay-sub'), menuEl = document.getElementById('menu')
+const bhp2El = document.getElementById('beast2-hp')
+const e1Grp = document.getElementById('enemy1-grp')
+const e2Grp = document.getElementById('enemy2-grp')
 function uUI() {
   phpEl.style.width = Math.max(0, st.php / st.pmhp * 100) + '%'
-  // Show combined enemy HP
-  let totalHP = 0, totalMax = 0
-  for (const e of st.enemies) { totalHP += Math.max(0, e.hp); totalMax += e.mhp }
-  bhpEl.style.width = (totalMax > 0 ? Math.max(0, totalHP / totalMax * 100) : 0) + '%'
+  // Enemy 1 HP
+  if (st.enemies[0]) bhpEl.style.width = Math.max(0, st.enemies[0].hp / st.enemies[0].mhp * 100) + '%'
+  // Enemy 2 HP (if 1v2)
+  if (st.enemies.length > 1) {
+    e2Grp.style.display = ''
+    bhp2El.style.width = Math.max(0, st.enemies[1].hp / st.enemies[1].mhp * 100) + '%'
+  } else {
+    e2Grp.style.display = 'none'
+  }
   waveEl.textContent = '第 ' + st.wave + ' 波'
 }
 function showOL(t, s, w) { olEl.classList.add('show'); olT.textContent = t; olT.className = w ? 'win' : 'lose'; olS.textContent = s }
 
 function reset() {
-  st.px = -4; st.py = GY; st.pz = 0; st.pvy = 0; st.php = st.pmhp; st.atk = false; st.atkCD = 0
+  upgrades.hp = 0; upgrades.atk = 0; upgrades.def = 0; upgrades.agi = 0
+  st.pmhp = 100; st.php = 100
+  st.px = -4; st.py = GY; st.pz = 0; st.pvy = 0; st.atk = false; st.atkCD = 0
   st.wave = 1; st.over = false; st.shake = 0; st.slowMo = 1
+  document.getElementById('upgrade-screen').style.display = 'none'
   curWpn = 0; wpnEl.textContent = '武器：劍'; updateWeaponVisibility()
   for (const a of arrows) { arrowGrp.remove(a.mesh) }; arrows.length = 0
 
@@ -508,9 +523,30 @@ function reset() {
   uUI()
 }
 
+// Upgrade screen
+function showUpgradeScreen() {
+  const scr = document.getElementById('upgrade-screen')
+  scr.style.display = 'flex'
+  document.getElementById('upgrade-wave-info').textContent = '第 ' + st.wave + ' 波 → 第 ' + (st.wave + 1) + ' 波'
+  document.getElementById('upgrade-stats-info').textContent =
+    '生命:' + st.pmhp + ' 攻擊:' + Math.round(getATK() * 100) + '% 防禦:' + Math.round((1 - getDEF()) * 100) + '% 敏捷:' + Math.round(getMSPD() / BASE_MSPD * 100) + '%'
+  document.getElementById('upg-hp-desc').textContent = st.pmhp + ' → ' + (st.pmhp + 25)
+  document.getElementById('upg-atk-desc').textContent = Math.round(getATK() * 100) + '% → ' + Math.round((1 + (upgrades.atk + 1) * 0.15) * 100) + '%'
+  document.getElementById('upg-def-desc').textContent = Math.round((1 - getDEF()) * 100) + '% → ' + Math.round((1 - Math.max(0.1, 1 - (upgrades.def + 1) * 0.12)) * 100) + '%'
+  document.getElementById('upg-agi-desc').textContent = Math.round(getMSPD() / BASE_MSPD * 100) + '% → ' + Math.round((1 + (upgrades.agi + 1) * 0.10) * 100) + '%'
+}
+
+window._onUpgrade = function(type) {
+  if (type === 'hp') { upgrades.hp++; st.pmhp += 25; st.php = Math.min(st.pmhp, st.php + 25) }
+  if (type === 'atk') upgrades.atk++
+  if (type === 'def') upgrades.def++
+  if (type === 'agi') upgrades.agi++
+  nxtWave()
+}
+
 // Hooks called by inline HTML script
 window._onStart = function() { st.started = true; st.over = false; reset() }
-window._onMenu = function() { st.started = false; st.over = false }
+window._onMenu = function() { st.started = false; st.over = false; document.getElementById('upgrade-screen').style.display = 'none' }
 window._onRestart = function() { st.started = true; st.over = false; reset() }
 
 // If user already clicked start before module loaded, catch up
@@ -518,14 +554,14 @@ if (window.GAME && window.GAME.started) { st.started = true; reset() }
 
 // ======================== GAME LOGIC (multi-enemy) ========================
 function hitEnemy(e, dmg) {
-  e.hp -= dmg; e.hitCD = 0.25; sndHit()
+  e.hp -= Math.round(dmg * getATK()); e.hitCD = 0.25; sndHit()
   spawnP(e.x, e.y + 1.5, e.z, 0xffcc00, 10); st.shake = 0.12; st.shakeI = 0.08
   if (e.hp <= 0) {
     e.alive = false; e.hp = 0
     spawnP(e.x, e.y + 1.5, e.z, 0xff4400, 20)
     if (e.obj) e.obj.group.visible = false
     // Check all dead
-    if (st.enemies.every(en => !en.alive)) { st.slowMo = 0.2; setTimeout(() => { st.slowMo = 1 }, 600); nxtWave() }
+    if (st.enemies.every(en => !en.alive)) { st.slowMo = 0.2; setTimeout(() => { st.slowMo = 1; showUpgradeScreen() }, 600) }
   }
 }
 
@@ -541,7 +577,7 @@ function upPlayer(dt) {
   const moveAngle = camAngle
   const fx = mx * Math.cos(moveAngle) - mz * Math.sin(moveAngle)
   const fz = mx * Math.sin(moveAngle) + mz * Math.cos(moveAngle)
-  st.px += fx * MSPD * dt; st.pz += fz * MSPD * dt
+  st.px += fx * getMSPD() * dt; st.pz += fz * getMSPD() * dt
   const ad = Math.hypot(st.px, st.pz); if (ad > 12) { st.px = st.px / ad * 12; st.pz = st.pz / ad * 12 }
   if (Math.abs(fx) > 0.1 || Math.abs(fz) > 0.1) st.pFace = Math.atan2(fx, fz)
 
@@ -611,7 +647,7 @@ function upOneEnemy(e, dt) {
     e.y = GY + Math.abs(Math.sin(performance.now() / 80)) * 0.12
     const hd = Math.sqrt((st.px - e.x) ** 2 + ((st.py + 1) - (e.y + 1)) ** 2 + (st.pz - e.z) ** 2)
     if (hd < 2 && st.pHitCD <= 0) {
-      st.php -= BDMG + st.wave * 1.5; st.pHitCD = 0.7; sndBeastHit()
+      st.php -= Math.round((BDMG + st.wave * 1.5) * getDEF()); st.pHitCD = 0.7; sndBeastHit()
       spawnP(st.px, st.py + 1.5, st.pz, 0xff4444, 12); st.shake = 0.2; st.shakeI = 0.15
       if (st.php <= 0) { st.php = 0; st.over = true; showOL('戰敗', '你喺第 ' + st.wave + ' 波倒下了', false) }
     }
