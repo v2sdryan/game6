@@ -31,7 +31,7 @@
     #menu.hidden{display:none}
     #menu h1{color:#e8c840;font-size:min(34px,8vw);text-shadow:0 0 15px rgba(232,200,64,0.3)}
     #menu p{color:#888;font-size:12px}
-    #menu .start-btn{padding:16px 52px;font-size:20px;font-weight:bold;background:#cc6633;color:#fff;border:none;border-radius:12px;-webkit-appearance:none;min-height:56px;min-width:220px}
+    #menu .start-btn{padding:16px 52px;font-size:20px;font-weight:bold;background:#cc6633;color:#fff;border:none;border-radius:12px;-webkit-appearance:none;min-height:56px;min-width:220px;pointer-events:auto;cursor:pointer;position:relative;z-index:30;touch-action:manipulation}
     #menu .start-btn:active{background:#ee8844;transform:scale(0.97)}
     #menu .hint{color:#555;font-size:10px;text-align:center;line-height:1.6;margin-top:6px}
 
@@ -42,7 +42,7 @@
     #overlay h1.lose{color:#cc3333;text-shadow:0 0 15px rgba(204,51,51,0.4)}
     #overlay p{color:#aaa;font-size:13px}
     .overlay-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
-    .overlay-btns button{padding:14px 28px;font-size:16px;font-weight:bold;color:#fff;border:none;border-radius:10px;-webkit-appearance:none;min-height:50px}
+    .overlay-btns button{padding:14px 28px;font-size:16px;font-weight:bold;color:#fff;border:none;border-radius:10px;-webkit-appearance:none;min-height:50px;pointer-events:auto;cursor:pointer;touch-action:manipulation}
     .overlay-btns .primary{background:#cc6633}.overlay-btns .primary:active{background:#ee8844}
     .overlay-btns .secondary{background:#444;min-width:120px;font-size:15px}.overlay-btns .secondary:active{background:#666}
 
@@ -119,12 +119,40 @@
   <div id="controls-hint">WASD 移動 | 空格 攻擊 | Q 武器 | 滑鼠右鍵旋轉鏡頭</div>
 
   <script>
-    function wireBtn(id, fn){var e=document.getElementById(id);if(!e)return;e.addEventListener('click',fn);e.addEventListener('touchend',function(ev){ev.preventDefault();fn()},{passive:false})}
-    wireBtn('start-btn',function(){if(window._startGame)window._startGame()});
-    wireBtn('btn-restart',function(){if(window._restartGame)window._restartGame()});
-    wireBtn('btn-back',function(){if(window._backToMenu)window._backToMenu()});
-    wireBtn('btn-sound',function(){if(window._toggleSound)window._toggleSound()});
-    wireBtn('btn-menu',function(){if(window._backToMenu)window._backToMenu()});
+    // Queue actions until module loads
+    var actionQueue = [];
+    function doAction(name) {
+      if (window[name]) { window[name](); }
+      else { actionQueue.push(name); }
+    }
+    // Process queue once module is ready
+    function flushQueue() {
+      for (var i = 0; i < actionQueue.length; i++) {
+        if (window[actionQueue[i]]) window[actionQueue[i]]();
+      }
+      actionQueue = [];
+    }
+    setInterval(flushQueue, 100);
+
+    function wireBtn(id, action) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      // Use touchstart (fires immediately on iOS, no 300ms delay)
+      el.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        doAction(action);
+      }, { passive: false });
+      el.addEventListener('click', function(e) {
+        e.preventDefault();
+        doAction(action);
+      });
+    }
+    wireBtn('start-btn', '_startGame');
+    wireBtn('btn-restart', '_restartGame');
+    wireBtn('btn-back', '_backToMenu');
+    wireBtn('btn-sound', '_toggleSound');
+    wireBtn('btn-menu', '_backToMenu');
   </script>
   <script type="module" src="/src/main.js"></script>
 </body>
