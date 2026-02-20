@@ -74,14 +74,10 @@ let soundOn = true
 let actx = null
 function getACtx() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); return actx }
 
-// Background music
-const bgMusic = new Audio('./Legions_of_the_Arena.mp3')
-bgMusic.loop = true; bgMusic.volume = 0.3
-let musicStarted = false
-function startMusic() { if (soundOn && !musicStarted) { bgMusic.play().then(() => { musicStarted = true }).catch(() => {}) } }
+// Music is handled by inline HTML script (window.GAME.musicOn)
 
 function playBeep(freq, dur, type, vol) {
-  if (!soundOn) return
+  if (!isSoundOn()) return
   try { const a = getACtx(), o = a.createOscillator(), g = a.createGain(); o.type = type || 'square'; o.frequency.value = freq; g.gain.value = vol || 0.06; g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + dur) } catch (e) {}
 }
 function sndAttack() { playBeep(800, 0.1, 'sawtooth', 0.08) }
@@ -90,12 +86,8 @@ function sndBeastHit() { playBeep(150, 0.2, 'sawtooth', 0.08) }
 function sndSwitch() { playBeep(1200, 0.05, 'sine', 0.06) }
 function sndWave() { playBeep(600, 0.3, 'triangle', 0.07); setTimeout(() => playBeep(800, 0.2, 'triangle', 0.07), 150) }
 
-window._toggleSound = function() {
-  soundOn = !soundOn
-  document.getElementById('btn-sound').textContent = soundOn ? '♫' : '✕'
-  document.getElementById('btn-sound').classList.toggle('off', !soundOn)
-  if (soundOn) { bgMusic.play().catch(() => {}) } else { bgMusic.pause() }
-}
+// Sound effects follow GAME.musicOn flag
+function isSoundOn() { return window.GAME ? window.GAME.musicOn : true }
 
 // ======================== LIGHTING ========================
 scene.add(new THREE.AmbientLight(0x303050, 0.6))
@@ -342,10 +334,16 @@ const phpEl = document.getElementById('player-hp'), bhpEl = document.getElementB
 const olEl = document.getElementById('overlay'), olT = document.getElementById('overlay-title'), olS = document.getElementById('overlay-sub'), menuEl = document.getElementById('menu')
 function uUI() { phpEl.style.width = Math.max(0, st.php / st.pmhp * 100) + '%'; bhpEl.style.width = Math.max(0, st.bhp / st.bmhp * 100) + '%'; waveEl.textContent = '第 ' + st.wave + ' 波' }
 function showOL(t, s, w) { olEl.classList.add('show'); olT.textContent = t; olT.className = w ? 'win' : 'lose'; olS.textContent = s }
-window._startGame = function() { menuEl.classList.add('hidden'); st.started = true; reset(); startMusic(); try { getACtx().resume() } catch (e) {} }
-window._backToMenu = function() { olEl.classList.remove('show'); menuEl.classList.remove('hidden'); st.started = false; st.over = false }
-window._restartGame = function() { olEl.classList.remove('show'); reset() }
+
 function reset() { st.px = -4; st.py = GY; st.pz = 0; st.pvy = 0; st.php = st.pmhp; st.atk = false; st.atkCD = 0; st.bx = 10; st.by = GY; st.bz = 0; st.bmhp = 80; st.bhp = st.bmhp; st.bSt = 'approach'; st.bT = 0; st.wave = 1; st.over = false; st.shake = 0; st.slowMo = 1; curWpn = 0; wpnEl.textContent = '武器：劍'; for (const a of arrows) { arrowGrp.remove(a.mesh) }; arrows.length = 0; uUI() }
+
+// Hooks called by inline HTML script
+window._onStart = function() { st.started = true; st.over = false; reset() }
+window._onMenu = function() { st.started = false; st.over = false }
+window._onRestart = function() { st.started = true; st.over = false; reset() }
+
+// If user already clicked start before module loaded, catch up
+if (window.GAME && window.GAME.started) { st.started = true; reset() }
 
 // ======================== GAME LOGIC ========================
 function upPlayer(dt) {
@@ -446,6 +444,9 @@ const clock = new THREE.Clock()
 function animate() {
   requestAnimationFrame(animate)
   const raw = clock.getDelta(), dt = Math.min(raw * st.slowMo, 0.05), t = performance.now()
+
+  // Sync with HTML button state
+  if (window.GAME) st.started = window.GAME.started
 
   upPlayer(dt); upBeast(dt); upArrows(dt); upParts(dt); uUI()
 
