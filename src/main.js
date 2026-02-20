@@ -13,12 +13,12 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.toneMapping = THREE.ACESFilmicToneMapping
-renderer.toneMappingExposure = 0.9
+renderer.toneMappingExposure = 1.3
 document.body.appendChild(renderer.domElement)
 
 // ======================== SCENE ========================
 const scene = new THREE.Scene()
-scene.fog = new THREE.FogExp2(0x0a0a1a, 0.02)
+scene.fog = new THREE.FogExp2(0x1a1a2a, 0.015)
 
 // ======================== CAMERA (orbitable) ========================
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200)
@@ -95,18 +95,21 @@ function sndWave() { playBeep(600, 0.3, 'triangle', 0.07); setTimeout(() => play
 // Sound effects follow GAME.musicOn flag
 function isSoundOn() { return window.GAME ? window.GAME.musicOn : true }
 
-// ======================== LIGHTING ========================
-scene.add(new THREE.AmbientLight(0x303050, 0.6))
-const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2)
-dirLight.position.set(5, 12, 8); dirLight.castShadow = true
+// ======================== LIGHTING (BRIGHTER) ========================
+scene.add(new THREE.AmbientLight(0x8888aa, 1.2))
+const dirLight = new THREE.DirectionalLight(0xfff5e0, 2.0)
+dirLight.position.set(5, 15, 8); dirLight.castShadow = true
 dirLight.shadow.mapSize.set(1024, 1024); dirLight.shadow.camera.near = 1; dirLight.shadow.camera.far = 40
 dirLight.shadow.camera.left = -15; dirLight.shadow.camera.right = 15; dirLight.shadow.camera.top = 10; dirLight.shadow.camera.bottom = -5
 scene.add(dirLight)
-scene.add(new THREE.PointLight(0xaabbff, 0.8, 50).translateX(10).translateY(15).translateZ(-8))
-const bounceLight = new THREE.PointLight(0xff6633, 0.3, 20); bounceLight.position.set(0, 0.5, 5); scene.add(bounceLight)
+// Fill light from opposite side
+const fillLight = new THREE.DirectionalLight(0xaaccff, 0.6)
+fillLight.position.set(-6, 8, -5); scene.add(fillLight)
+scene.add(new THREE.PointLight(0xffeedd, 1.0, 50).translateX(10).translateY(15).translateZ(-8))
+const bounceLight = new THREE.PointLight(0xff8844, 0.4, 25); bounceLight.position.set(0, 0.5, 5); scene.add(bounceLight)
 
 // ======================== ENVIRONMENT ========================
-scene.add(new THREE.Mesh(new THREE.SphereGeometry(80, 32, 16), new THREE.MeshBasicMaterial({ color: 0x080818, side: THREE.BackSide })))
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(80, 32, 16), new THREE.MeshBasicMaterial({ color: 0x1a1a30, side: THREE.BackSide })))
 
 const starGeo = new THREE.BufferGeometry(); const sv = []
 for (let i = 0; i < 400; i++) { const t = Math.random() * Math.PI * 2, p = Math.acos(Math.random() * 2 - 1), r = 60 + Math.random() * 15; sv.push(r * Math.sin(p) * Math.cos(t), r * Math.cos(p), r * Math.sin(p) * Math.sin(t)) }
@@ -193,25 +196,63 @@ function createSoldier() {
   rLeg.add(_p(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.07, 0.24), brown), 0, -0.85, 0.04))
   rLeg.position.set(0.2, 0.6, 0); g.add(rLeg)
 
-  // SPEAR (BIGGER, more visible)
-  const spear = new THREE.Group()
-  spear.add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.035, 3.5, 8), brown))
-  spear.add(_p(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 8), blade), 0, 1.95, 0))
-  // Spear glow
-  spear.add((function(){var _m=new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.2, 8), new THREE.MeshBasicMaterial({ color: 0xccddff, transparent: true, opacity: 0.2 }));_m.position.set(0, 1.85, 0);return _m})())
-  spear.position.set(-0.65, 1.3, 0.4); spear.rotation.x = -0.15; g.add(spear)
+  // === WEAPON: SWORD ===
+  const swordGrp = new THREE.Group()
+  // Blade
+  const swordBlade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.6, 0.12), blade)
+  swordBlade.position.y = 0.8; swordGrp.add(swordBlade)
+  // Blade glow
+  const swordGlow = new THREE.Mesh(new THREE.BoxGeometry(0.09, 1.4, 0.04), new THREE.MeshBasicMaterial({ color: 0xccddff, transparent: true, opacity: 0.15 }))
+  swordGlow.position.y = 0.7; swordGrp.add(swordGlow)
+  // Crossguard
+  const crossguard = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.08, 0.1), gold)
+  crossguard.position.y = -0.02; swordGrp.add(crossguard)
+  // Handle
+  const swordHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.35, 6), brown)
+  swordHandle.position.y = -0.22; swordGrp.add(swordHandle)
+  // Pommel
+  const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), gold)
+  pommel.position.y = -0.42; swordGrp.add(pommel)
+  swordGrp.position.set(-0.65, 1.2, 0.35); swordGrp.rotation.x = -0.2; g.add(swordGrp)
 
-  // SHIELD (BIGGER)
+  // === WEAPON: SPEAR ===
+  const spearGrp = new THREE.Group()
+  spearGrp.add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.035, 3.5, 8), brown))
+  spearGrp.add(_p(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 8), blade), 0, 1.95, 0))
+  const spearGlow = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.2, 8), new THREE.MeshBasicMaterial({ color: 0xccddff, transparent: true, opacity: 0.2 }))
+  spearGlow.position.set(0, 1.85, 0); spearGrp.add(spearGlow)
+  spearGrp.position.set(-0.65, 1.3, 0.4); spearGrp.rotation.x = -0.15; spearGrp.visible = false; g.add(spearGrp)
+
+  // === WEAPON: BOW ===
+  const bowGrp = new THREE.Group()
+  // Bow arc (using torus segment)
+  const bowArc = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.035, 8, 16, Math.PI * 1.1), brown)
+  bowArc.rotation.z = Math.PI / 2; bowGrp.add(bowArc)
+  // Bowstring
+  const stringGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.55, 0), new THREE.Vector3(0.25, 0, 0), new THREE.Vector3(0, -0.55, 0)])
+  const bowString = new THREE.Line(stringGeo, new THREE.LineBasicMaterial({ color: 0xdddddd, linewidth: 2 }))
+  bowGrp.add(bowString)
+  // Arrow nocked
+  const nockArrow = new THREE.Group()
+  nockArrow.add(new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.0, 4), new THREE.MeshStandardMaterial({ color: 0xaa8844 })))
+  nockArrow.add(_p(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.15, 4), blade), 0, 0.55, 0))
+  nockArrow.rotation.z = -Math.PI / 2; nockArrow.position.x = 0.2
+  bowGrp.add(nockArrow)
+  bowGrp.position.set(-0.7, 1.5, 0.3); bowGrp.rotation.x = -0.1; bowGrp.visible = false; g.add(bowGrp)
+
+  // SHIELD
   const shield = new THREE.Group()
   shield.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 0.65), new THREE.MeshStandardMaterial({ color: 0xcc9922, roughness: 0.4, metalness: 0.3 })))
   shield.add(_p(new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), gold), 0.06, 0, 0))
-  shield.add((function(){var _m=new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.65, 0.45), new THREE.MeshStandardMaterial({ color: 0x882222 }));_m.position.set(0.06, 0, 0);return _m})())
-  // Shield rim glow
+  const shieldDeco = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.65, 0.45), new THREE.MeshStandardMaterial({ color: 0x882222 }))
+  shieldDeco.position.set(0.06, 0, 0); shield.add(shieldDeco)
   shield.add(_pr(new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.03, 6, 20), gold), 0.06, 0, 0, 0, Math.PI / 2, 0))
   shield.position.set(0.7, 1.3, 0.3); g.add(shield)
 
+  const weaponModels = [swordGrp, spearGrp, bowGrp]
+
   g.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true } })
-  return { group: g, lArm, rArm, lLeg, rLeg, spear, shield, plume }
+  return { group: g, lArm, rArm, lLeg, rLeg, weaponModels, shield, plume, swordGrp, spearGrp, bowGrp }
 }
 
 // ======================== BEAST (3D) ========================
@@ -272,12 +313,26 @@ function createBeast() {
 
 // ======================== INSTANTIATE ========================
 const soldier = createSoldier(); soldier.group.position.set(-4, 0, 0); scene.add(soldier.group)
+// Store base positions for animation
+soldier.swordGrp._baseRX = -0.2; soldier.swordGrp._baseZ = 0.35
+soldier.spearGrp._baseRX = -0.15; soldier.spearGrp._baseZ = 0.4
+soldier.bowGrp._baseRX = -0.1; soldier.bowGrp._baseZ = 0.3
+updateWeaponVisibility()
 const beast = createBeast(); beast.group.position.set(10, 0, 0); scene.add(beast.group)
 
 // ======================== WEAPONS ========================
 const WEAPONS = [{ name: '劍', dmg: 15, range: 2.8, cd: 0.3 }, { name: '矛', dmg: 20, range: 4.0, cd: 0.5 }, { name: '弓', dmg: 12, range: 12, cd: 0.6 }]
 let curWpn = 0; const wpnEl = document.getElementById('weapon-display')
-function switchWpn() { curWpn = (curWpn + 1) % WEAPONS.length; wpnEl.textContent = '武器：' + WEAPONS[curWpn].name; sndSwitch() }
+function switchWpn() {
+  curWpn = (curWpn + 1) % WEAPONS.length; wpnEl.textContent = '武器：' + WEAPONS[curWpn].name; sndSwitch()
+  updateWeaponVisibility()
+}
+function updateWeaponVisibility() {
+  if (!soldier.weaponModels) return
+  for (let i = 0; i < soldier.weaponModels.length; i++) {
+    soldier.weaponModels[i].visible = (i === curWpn)
+  }
+}
 
 const arrowGrp = new THREE.Group(); scene.add(arrowGrp); const arrows = []
 const partGrp = new THREE.Group(); scene.add(partGrp); const parts = []
@@ -341,7 +396,24 @@ const olEl = document.getElementById('overlay'), olT = document.getElementById('
 function uUI() { phpEl.style.width = Math.max(0, st.php / st.pmhp * 100) + '%'; bhpEl.style.width = Math.max(0, st.bhp / st.bmhp * 100) + '%'; waveEl.textContent = '第 ' + st.wave + ' 波' }
 function showOL(t, s, w) { olEl.classList.add('show'); olT.textContent = t; olT.className = w ? 'win' : 'lose'; olS.textContent = s }
 
-function reset() { st.px = -4; st.py = GY; st.pz = 0; st.pvy = 0; st.php = st.pmhp; st.atk = false; st.atkCD = 0; st.bx = 10; st.by = GY; st.bz = 0; st.bmhp = 80; st.bhp = st.bmhp; st.bSt = 'approach'; st.bT = 0; st.wave = 1; st.over = false; st.shake = 0; st.slowMo = 1; curWpn = 0; wpnEl.textContent = '武器：劍'; for (const a of arrows) { arrowGrp.remove(a.mesh) }; arrows.length = 0; uUI() }
+function reset() {
+  st.px = -4; st.py = GY; st.pz = 0; st.pvy = 0; st.php = st.pmhp; st.atk = false; st.atkCD = 0
+  st.bx = 10; st.by = GY; st.bz = 0; st.bmhp = 80; st.bhp = st.bmhp; st.bSt = 'approach'; st.bT = 0
+  st.wave = 1; st.over = false; st.shake = 0; st.slowMo = 1
+  curWpn = 0; wpnEl.textContent = '武器：劍'; updateWeaponVisibility()
+  for (const a of arrows) { arrowGrp.remove(a.mesh) }; arrows.length = 0
+
+  // Handle battle mode from menu selection
+  const G = window.GAME || {}
+  st.battleMode = G.battleMode || '1v1'
+  st.enemyType = G.enemyType || 'beast'
+
+  // TODO: spawn second beast for 1v2 mode (future enhancement)
+  // For now, 1v2 = beast has 1.6x HP
+  if (st.battleMode === '1v2') { st.bmhp = Math.round(st.bmhp * 1.6); st.bhp = st.bmhp }
+
+  uUI()
+}
 
 // Hooks called by inline HTML script
 window._onStart = function() { st.started = true; st.over = false; reset() }
@@ -463,8 +535,17 @@ function animate() {
   const wk = moving ? Math.sin(t / 120) * 0.4 : 0
   soldier.lLeg.rotation.x = wk; soldier.rLeg.rotation.x = -wk; soldier.lArm.rotation.x = -wk * 0.3
   soldier.group.position.y = st.py + (moving ? Math.abs(Math.sin(t / 120)) * 0.04 : 0)
-  if (st.atk) { const p = Math.sin(st.atkT * 20) * 0.8; soldier.spear.rotation.x = -0.15 - p; soldier.spear.position.z = 0.4 + p * 0.6; soldier.lArm.rotation.x = -p * 0.6 }
-  else { soldier.spear.rotation.x += (-0.15 - soldier.spear.rotation.x) * 0.1; soldier.spear.position.z += (0.4 - soldier.spear.position.z) * 0.1 }
+  // Weapon attack animation
+  const activeWpn = soldier.weaponModels[curWpn]
+  if (st.atk) {
+    const p = Math.sin(st.atkT * 20) * 0.8
+    activeWpn.rotation.x = (activeWpn._baseRX || -0.15) - p
+    activeWpn.position.z = (activeWpn._baseZ || 0.35) + p * 0.6
+    soldier.lArm.rotation.x = -p * 0.6
+  } else {
+    activeWpn.rotation.x += ((activeWpn._baseRX || -0.15) - activeWpn.rotation.x) * 0.1
+    activeWpn.position.z += ((activeWpn._baseZ || 0.35) - activeWpn.position.z) * 0.1
+  }
   soldier.group.traverse(c => { if (c.isMesh && c.material.emissive) c.material.emissive.setHex(st.pHitCD > 0.4 ? 0x881111 : 0x000000) })
 
   // Beast

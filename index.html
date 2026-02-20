@@ -30,6 +30,8 @@
     .music-btn:active{background:rgba(255,255,255,0.2)}
     .music-btn.off{border-color:#883333;color:#883333}
     .hint{color:#555;font-size:10px;text-align:center;line-height:1.6;margin-top:8px}
+    .sel-btn{padding:14px 20px;font-size:15px;font-weight:bold;background:rgba(255,255,255,0.08);color:#ddd;border:2px solid #555;border-radius:10px;min-width:140px;min-height:50px;cursor:pointer;touch-action:manipulation;-webkit-appearance:none}
+    .sel-btn:active{background:rgba(255,255,255,0.2);border-color:#e8c840}
 
     /* TOP BUTTONS */
     .top-btns{position:fixed;top:6px;top:max(6px,env(safe-area-inset-top));right:10px;z-index:50;display:flex;gap:5px}
@@ -72,8 +74,20 @@
   <div id="menu">
     <h1>角鬥士 vs 猛獸</h1>
     <p>羅馬競技場 3D 生存戰</p>
-    <button class="menu-btn" id="start-btn">開始遊戲</button>
-    <button class="music-btn" id="menu-music-btn">♫ 背景音樂: 開</button>
+    <div id="menu-main">
+      <button class="menu-btn" id="start-btn">開始遊戲</button>
+      <button class="music-btn" id="menu-music-btn">♫ 背景音樂: 開</button>
+    </div>
+    <div id="menu-select" style="display:none;text-align:center">
+      <p style="color:#e8c840;font-size:16px;margin-bottom:12px;font-weight:bold">選擇對手</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+        <button class="sel-btn" data-mode="1v1" data-type="beast">1對1 對猛獸</button>
+        <button class="sel-btn" data-mode="1v1" data-type="human">1對1 對人</button>
+        <button class="sel-btn" data-mode="1v2" data-type="beast">1對2 對猛獸</button>
+        <button class="sel-btn" data-mode="1v2" data-type="human">1對2 對人</button>
+      </div>
+      <button class="music-btn" style="margin-top:12px" onclick="document.getElementById('menu-select').style.display='none';document.getElementById('menu-main').style.display=''">← 返回</button>
+    </div>
     <div class="hint">左邊拖動移動 | 右邊按鈕攻擊<br>雙指拖動旋轉鏡頭</div>
   </div>
 
@@ -142,17 +156,31 @@
     }
 
     function startGame() {
+      // Show enemy selection
+      document.getElementById('menu-main').style.display = 'none';
+      document.getElementById('menu-select').style.display = '';
+    }
+
+    function launchGame(mode, type) {
+      window.GAME.battleMode = mode;
+      window.GAME.enemyType = type;
       document.getElementById('menu').classList.add('hidden');
       window.GAME.started = true;
-      // Start music on first interaction
       if (window.GAME.musicOn) bgm.play().catch(function(){});
-      // Notify module if loaded
       if (window._onStart) window._onStart();
     }
+
+    // Wire selection buttons
+    document.querySelectorAll('.sel-btn').forEach(function(btn) {
+      btn.addEventListener('touchstart', function(e) { e.preventDefault(); launchGame(btn.dataset.mode, btn.dataset.type); }, { passive: false });
+      btn.addEventListener('click', function() { launchGame(btn.dataset.mode, btn.dataset.type); });
+    });
 
     function backToMenu() {
       document.getElementById('overlay').classList.remove('show');
       document.getElementById('menu').classList.remove('hidden');
+      document.getElementById('menu-main').style.display = '';
+      document.getElementById('menu-select').style.display = 'none';
       window.GAME.started = false;
       if (window._onMenu) window._onMenu();
     }
