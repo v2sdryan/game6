@@ -1,5 +1,11 @@
 import * as THREE from 'three'
 
+function _p(mesh, x, y, z) { mesh.position.set(x||0, y||0, z||0); return mesh }
+function _ps(mesh, x, y, z, sx, sy, sz) { mesh.position.set(x||0, y||0, z||0); mesh.scale.set(sx, sy, sz); return mesh }
+function _pr(mesh, x, y, z, rx, ry, rz) { mesh.position.set(x||0, y||0, z||0); mesh.rotation.set(rx||0, ry||0, rz||0); return mesh }
+function _psr(mesh, x, y, z, sx, sy, sz, rx, ry, rz) { mesh.position.set(x||0, y||0, z||0); mesh.scale.set(sx, sy, sz); mesh.rotation.set(rx||0, ry||0, rz||0); return mesh }
+
+
 // ======================== RENDERER ========================
 const renderer = new THREE.WebGLRenderer({ antialias: true })
 renderer.setSize(window.innerWidth, window.innerHeight)
@@ -138,70 +144,70 @@ function createSoldier() {
   const blade = new THREE.MeshStandardMaterial({ color: 0xddddee, roughness: 0.2, metalness: 0.8 })
 
   // Torso
-  g.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.4, 1.0, 10), armor), { position: new THREE.Vector3(0, 1.5, 0) }))
-  g.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.55, 0.5, 10), red), { position: new THREE.Vector3(0, 0.85, 0) }))
-  g.add(Object.assign(new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 8, 20), brown), { position: new THREE.Vector3(0, 1.1, 0), rotation: new THREE.Euler(Math.PI / 2, 0, 0) }))
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.1), gold), { position: new THREE.Vector3(0, 1.1, 0.42) }))
+  g.add(_p(new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.4, 1.0, 10), armor), 0, 1.5, 0))
+  g.add(_p(new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.55, 0.5, 10), red), 0, 0.85, 0))
+  g.add(_pr(new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 8, 20), brown), 0, 1.1, 0, Math.PI / 2, 0, 0))
+  g.add(_p(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.1), gold), 0, 1.1, 0.42))
 
   // Shoulders
   for (const s of [-1, 1]) {
-    g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), armor), { position: new THREE.Vector3(s * 0.55, 1.9, 0), scale: new THREE.Vector3(1, 0.6, 1) }))
-    g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), gold), { position: new THREE.Vector3(s * 0.55, 1.92, 0.12) }))
+    g.add(_ps(new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), armor), s * 0.55, 1.9, 0, 1, 0.6, 1))
+    g.add(_p(new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), gold), s * 0.55, 1.92, 0.12))
   }
 
   // Head + Face
-  g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 10), skin), { position: new THREE.Vector3(0, 2.35, 0) }))
+  g.add(_p(new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 10), skin), 0, 2.35, 0))
   for (const s of [-0.1, 0.1]) {
-    g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff })), { position: new THREE.Vector3(s, 2.38, 0.27) }))
-    g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), new THREE.MeshBasicMaterial({ color: 0x1a1008 })), { position: new THREE.Vector3(s, 2.38, 0.3) }))
+    g.add((function(){var _m=new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));_m.position.set(s, 2.38, 0.27);return _m})())
+    g.add((function(){var _m=new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), new THREE.MeshBasicMaterial({ color: 0x1a1008 }));_m.position.set(s, 2.38, 0.3);return _m})())
   }
 
   // Helmet + plume
-  g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), armor), { position: new THREE.Vector3(0, 2.4, 0) }))
+  g.add(_p(new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), armor), 0, 2.4, 0))
   const plume = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.55, 0.35), red)
   plume.position.set(0, 2.9, -0.05); g.add(plume)
-  g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), red), { position: new THREE.Vector3(0, 3.2, -0.05), scale: new THREE.Vector3(0.6, 1, 1.5) }))
-  for (const s of [-1, 1]) g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.28, 0.16), armor), { position: new THREE.Vector3(s * 0.34, 2.25, 0.08) }))
+  g.add(_ps(new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), red), 0, 3.2, -0.05, 0.6, 1, 1.5))
+  for (const s of [-1, 1]) g.add(_p(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.28, 0.16), armor), s * 0.34, 2.25, 0.08))
 
   // Arms
   const lArm = new THREE.Group()
-  lArm.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.5, 8), skin), { position: new THREE.Vector3(0, -0.25, 0) }))
-  lArm.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.45, 8), skin), { position: new THREE.Vector3(0, -0.6, 0) }))
+  lArm.add(_p(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.5, 8), skin), 0, -0.25, 0))
+  lArm.add(_p(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.45, 8), skin), 0, -0.6, 0))
   lArm.position.set(-0.65, 1.85, 0); g.add(lArm)
 
   const rArm = new THREE.Group()
-  rArm.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.5, 8), skin), { position: new THREE.Vector3(0, -0.25, 0) }))
-  rArm.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.45, 8), skin), { position: new THREE.Vector3(0, -0.6, 0) }))
+  rArm.add(_p(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.5, 8), skin), 0, -0.25, 0))
+  rArm.add(_p(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.45, 8), skin), 0, -0.6, 0))
   rArm.position.set(0.65, 1.85, 0); g.add(rArm)
 
   // Legs
   const lLeg = new THREE.Group()
-  lLeg.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.5, 8), skin), { position: new THREE.Vector3(0, -0.25, 0) }))
-  lLeg.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.45, 8), skin), { position: new THREE.Vector3(0, -0.6, 0) }))
-  lLeg.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.07, 0.24), brown), { position: new THREE.Vector3(0, -0.85, 0.04) }))
+  lLeg.add(_p(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.5, 8), skin), 0, -0.25, 0))
+  lLeg.add(_p(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.45, 8), skin), 0, -0.6, 0))
+  lLeg.add(_p(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.07, 0.24), brown), 0, -0.85, 0.04))
   lLeg.position.set(-0.2, 0.6, 0); g.add(lLeg)
 
   const rLeg = new THREE.Group()
-  rLeg.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.5, 8), skin), { position: new THREE.Vector3(0, -0.25, 0) }))
-  rLeg.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.45, 8), skin), { position: new THREE.Vector3(0, -0.6, 0) }))
-  rLeg.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.07, 0.24), brown), { position: new THREE.Vector3(0, -0.85, 0.04) }))
+  rLeg.add(_p(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.5, 8), skin), 0, -0.25, 0))
+  rLeg.add(_p(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.45, 8), skin), 0, -0.6, 0))
+  rLeg.add(_p(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.07, 0.24), brown), 0, -0.85, 0.04))
   rLeg.position.set(0.2, 0.6, 0); g.add(rLeg)
 
   // SPEAR (BIGGER, more visible)
   const spear = new THREE.Group()
-  spear.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.035, 3.5, 8), brown), {}))
-  spear.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 8), blade), { position: new THREE.Vector3(0, 1.95, 0) }))
+  spear.add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.035, 3.5, 8), brown))
+  spear.add(_p(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 8), blade), 0, 1.95, 0))
   // Spear glow
-  spear.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.2, 8), new THREE.MeshBasicMaterial({ color: 0xccddff, transparent: true, opacity: 0.2 })), { position: new THREE.Vector3(0, 1.85, 0) }))
+  spear.add((function(){var _m=new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.2, 8), new THREE.MeshBasicMaterial({ color: 0xccddff, transparent: true, opacity: 0.2 }));_m.position.set(0, 1.85, 0);return _m})())
   spear.position.set(-0.65, 1.3, 0.4); spear.rotation.x = -0.15; g.add(spear)
 
   // SHIELD (BIGGER)
   const shield = new THREE.Group()
   shield.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 0.65), new THREE.MeshStandardMaterial({ color: 0xcc9922, roughness: 0.4, metalness: 0.3 })))
-  shield.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), gold), { position: new THREE.Vector3(0.06, 0, 0) }))
-  shield.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.65, 0.45), new THREE.MeshStandardMaterial({ color: 0x882222 })), { position: new THREE.Vector3(0.06, 0, 0) }))
+  shield.add(_p(new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), gold), 0.06, 0, 0))
+  shield.add((function(){var _m=new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.65, 0.45), new THREE.MeshStandardMaterial({ color: 0x882222 }));_m.position.set(0.06, 0, 0);return _m})())
   // Shield rim glow
-  shield.add(Object.assign(new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.03, 6, 20), gold), { position: new THREE.Vector3(0.06, 0, 0), rotation: new THREE.Euler(0, Math.PI / 2, 0) }))
+  shield.add(_pr(new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.03, 6, 20), gold), 0.06, 0, 0, 0, Math.PI / 2, 0))
   shield.position.set(0.7, 1.3, 0.3); g.add(shield)
 
   g.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true } })
@@ -217,27 +223,27 @@ function createBeast() {
 
   const body = new THREE.Mesh(new THREE.SphereGeometry(0.85, 12, 10), bMat)
   body.scale.set(1.2, 0.9, 1.0); body.position.y = 1.2; g.add(body)
-  g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), new THREE.MeshStandardMaterial({ color: 0x6a5a50, roughness: 0.8 })), { position: new THREE.Vector3(0, 1.0, 0.3), scale: new THREE.Vector3(0.8, 0.7, 0.6) }))
+  g.add((function(){var _m=new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), new THREE.MeshStandardMaterial({ color: 0x6a5a50, roughness: 0.8 }));_m.position.set(0, 1.0, 0.3);_m.scale.set(0.8, 0.7, 0.6);return _m})())
 
   const head = new THREE.Group()
   head.add(new THREE.Mesh(new THREE.SphereGeometry(0.58, 12, 10), bMat))
-  head.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 6), dMat), { position: new THREE.Vector3(0, -0.1, 0.42), scale: new THREE.Vector3(0.9, 0.7, 1.2) }))
-  head.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), new THREE.MeshBasicMaterial({ color: 0x0a0505 })), { position: new THREE.Vector3(0, -0.02, 0.62) }))
+  head.add(_ps(new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 6), dMat), 0, -0.1, 0.42, 0.9, 0.7, 1.2))
+  head.add((function(){var _m=new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), new THREE.MeshBasicMaterial({ color: 0x0a0505 }));_m.position.set(0, -0.02, 0.62);return _m})())
 
   const jaw = new THREE.Group()
-  jaw.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6, 0, Math.PI * 2, Math.PI * 0.5), dMat), { position: new THREE.Vector3(0, 0, 0.3), scale: new THREE.Vector3(0.8, 0.5, 1) }))
-  for (const s of [-0.08, 0.08]) jaw.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.18, 4), claw), { position: new THREE.Vector3(s, -0.14, 0.36), rotation: new THREE.Euler(0.2, 0, 0) }))
+  jaw.add(_ps(new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6, 0, Math.PI * 2, Math.PI * 0.5), dMat), 0, 0, 0.3, 0.8, 0.5, 1))
+  for (const s of [-0.08, 0.08]) jaw.add(_pr(new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.18, 4), claw), s, -0.14, 0.36, 0.2, 0, 0))
   jaw.position.y = -0.15; head.add(jaw)
-  for (const s of [-0.1, 0.1]) head.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.14, 4), claw), { position: new THREE.Vector3(s, -0.22, 0.47) }))
+  for (const s of [-0.1, 0.1]) head.add(_p(new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.14, 4), claw), s, -0.22, 0.47))
 
   // EYES (bigger, brighter glow)
   for (const s of [-0.22, 0.22]) {
-    head.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), new THREE.MeshBasicMaterial({ color: 0x1a1008 })), { position: new THREE.Vector3(s, 0.1, 0.42) }))
-    head.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), new THREE.MeshStandardMaterial({ color: 0xffee22, emissive: 0xffcc00, emissiveIntensity: 3 })), { position: new THREE.Vector3(s, 0.1, 0.45) }))
-    head.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), new THREE.MeshBasicMaterial({ color: 0x0a0000 })), { position: new THREE.Vector3(s, 0.1, 0.5), scale: new THREE.Vector3(0.5, 1, 1) }))
+    head.add((function(){var _m=new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), new THREE.MeshBasicMaterial({ color: 0x1a1008 }));_m.position.set(s, 0.1, 0.42);return _m})())
+    head.add((function(){var _m=new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), new THREE.MeshStandardMaterial({ color: 0xffee22, emissive: 0xffcc00, emissiveIntensity: 3 }));_m.position.set(s, 0.1, 0.45);return _m})())
+    head.add((function(){var _m=new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), new THREE.MeshBasicMaterial({ color: 0x0a0000 }));_m.position.set(s, 0.1, 0.5);_m.scale.set(0.5, 1, 1);return _m})())
     const el = new THREE.PointLight(0xffcc00, 0.5, 4); el.position.set(s, 0.1, 0.55); head.add(el)
   }
-  for (const s of [-1, 1]) head.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.28, 4), bMat), { position: new THREE.Vector3(s * 0.32, 0.48, 0.1), rotation: new THREE.Euler(0, 0, s * -0.4) }))
+  for (const s of [-1, 1]) head.add(_pr(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.28, 4), bMat), s * 0.32, 0.48, 0.1, 0, 0, s * -0.4))
   for (let i = 0; i < 6; i++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.3, 4), dMat); const a = (i / 6) * Math.PI - Math.PI * 0.5; sp.position.set(Math.sin(a) * 0.38, 0.42 + Math.cos(a) * 0.15, -0.1); sp.rotation.set(-0.3, 0, a * 0.5); head.add(sp) }
   head.position.set(0, 1.95, 0.3); g.add(head)
 
@@ -252,12 +258,12 @@ function createBeast() {
 
   // Claws
   const lC = new THREE.Group()
-  lC.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.07, 0.65, 6), bMat), { position: new THREE.Vector3(0, -0.32, 0) }))
-  for (let i = -1; i <= 1; i++) lC.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.18, 4), claw), { position: new THREE.Vector3(i * 0.04, -0.7, 0), rotation: new THREE.Euler(0.3, 0, 0) }))
+  lC.add(_p(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.07, 0.65, 6), bMat), 0, -0.32, 0))
+  for (let i = -1; i <= 1; i++) lC.add(_pr(new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.18, 4), claw), i * 0.04, -0.7, 0, 0.3, 0, 0))
   lC.position.set(-0.75, 1.1, 0.45); lC.rotation.x = 0.5; g.add(lC)
   const rC = lC.clone(); rC.position.set(0.75, 1.1, 0.45); g.add(rC)
 
-  for (const s of [-1, 1]) { g.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.09, 0.7, 6), bMat), { position: new THREE.Vector3(s * 0.42, 0.35, -0.3) })); g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 6), dMat), { position: new THREE.Vector3(s * 0.42, 0, -0.25), scale: new THREE.Vector3(1, 0.5, 1.3) })) }
+  for (const s of [-1, 1]) { g.add(_p(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.09, 0.7, 6), bMat), s * 0.42, 0.35, -0.3)); g.add(_ps(new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 6), dMat), s * 0.42, 0, -0.25, 1, 0.5, 1.3)) }
   const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.025, 1.0, 6), bMat); tail.position.set(0, 0.9, -0.85); tail.rotation.x = 0.8; g.add(tail)
 
   g.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true } })
