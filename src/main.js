@@ -12,14 +12,23 @@ document.body.appendChild(renderer.domElement)
 
 // ======================== SCENE ========================
 const scene = new THREE.Scene()
-scene.fog = new THREE.FogExp2(0x0a0a1a, 0.025)
+scene.fog = new THREE.FogExp2(0x0a0a1a, 0.02)
 
-// ======================== CAMERA ========================
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200)
-camera.position.set(0, 6, 14)
-camera.lookAt(0, 1.5, 0)
-const cameraTarget = new THREE.Vector3(0, 1.5, 0)
-const cameraBasePos = new THREE.Vector3(0, 6, 14)
+// ======================== CAMERA (orbitable) ========================
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200)
+let camAngle = 0       // horizontal orbit angle
+let camPitch = 0.35    // vertical pitch (radians)
+let camDist = 16       // distance from target
+const camTarget = new THREE.Vector3(0, 1.5, 0)
+
+function updateCamera() {
+  const x = camTarget.x + Math.sin(camAngle) * camDist * Math.cos(camPitch)
+  const y = camTarget.y + Math.sin(camPitch) * camDist
+  const z = camTarget.z + Math.cos(camAngle) * camDist * Math.cos(camPitch)
+  camera.position.set(x, y, z)
+  camera.lookAt(camTarget)
+}
+updateCamera()
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight
@@ -27,48 +36,53 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight)
 })
 
-// ======================== LIGHTING ========================
-const ambientLight = new THREE.AmbientLight(0x303050, 0.6)
-scene.add(ambientLight)
+// ======================== CAMERA CONTROLS ========================
+// Desktop: right-click drag
+let camDragging = false, camLastX = 0, camLastY = 0
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault())
+renderer.domElement.addEventListener('mousedown', e => { if (e.button === 2) { camDragging = true; camLastX = e.clientX; camLastY = e.clientY } })
+window.addEventListener('mousemove', e => {
+  if (!camDragging) return
+  camAngle -= (e.clientX - camLastX) * 0.005
+  camPitch = Math.max(0.1, Math.min(1.2, camPitch + (e.clientY - camLastY) * 0.005))
+  camLastX = e.clientX; camLastY = e.clientY
+})
+window.addEventListener('mouseup', () => { camDragging = false })
+// Scroll zoom
+renderer.domElement.addEventListener('wheel', e => { camDist = Math.max(8, Math.min(30, camDist + e.deltaY * 0.01)) }, { passive: true })
 
-const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2)
-dirLight.position.set(5, 12, 8)
-dirLight.castShadow = true
-dirLight.shadow.mapSize.set(1024, 1024)
-dirLight.shadow.camera.near = 1
-dirLight.shadow.camera.far = 40
-dirLight.shadow.camera.left = -15
-dirLight.shadow.camera.right = 15
-dirLight.shadow.camera.top = 10
-dirLight.shadow.camera.bottom = -5
-scene.add(dirLight)
-
-// Moon light
-const moonLight = new THREE.PointLight(0xaabbff, 0.8, 50)
-moonLight.position.set(10, 15, -8)
-scene.add(moonLight)
-
-// Dramatic red/orange ground bounce
-const bounceLight = new THREE.PointLight(0xff6633, 0.3, 20)
-bounceLight.position.set(0, 0.5, 5)
-scene.add(bounceLight)
+// Mobile: two-finger drag to orbit
+let camTouches = []
+renderer.domElement.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    camTouches = [{ x: e.touches[0].clientX, y: e.touches[0].clientY }, { x: e.touches[1].clientX, y: e.touches[1].clientY }]
+    document.getElementById('cam-hint').classList.add('hidden')
+  }
+}, { passive: true })
+renderer.domElement.addEventListener('touchmove', e => {
+  if (e.touches.length === 2 && camTouches.length === 2) {
+    const dx = ((e.touches[0].clientX + e.touches[1].clientX) / 2) - ((camTouches[0].x + camTouches[1].x) / 2)
+    const dy = ((e.touches[0].clientY + e.touches[1].clientY) / 2) - ((camTouches[0].y + camTouches[1].y) / 2)
+    camAngle -= dx * 0.006
+    camPitch = Math.max(0.1, Math.min(1.2, camPitch + dy * 0.006))
+    camTouches = [{ x: e.touches[0].clientX, y: e.touches[0].clientY }, { x: e.touches[1].clientX, y: e.touches[1].clientY }]
+  }
+}, { passive: true })
 
 // ======================== AUDIO ========================
 let soundOn = true
 let actx = null
-function getAudioCtx() {
-  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)()
-  return actx
-}
+function getACtx() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); return actx }
+
+// Background music
+const bgMusic = new Audio('./Legions_of_the_Arena.mp3')
+bgMusic.loop = true; bgMusic.volume = 0.3
+let musicStarted = false
+function startMusic() { if (soundOn && !musicStarted) { bgMusic.play().then(() => { musicStarted = true }).catch(() => {}) } }
+
 function playBeep(freq, dur, type, vol) {
   if (!soundOn) return
-  try {
-    const a = getAudioCtx()
-    const o = a.createOscillator(), g = a.createGain()
-    o.type = type || 'square'; o.frequency.value = freq
-    g.gain.value = vol || 0.06; g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur)
-    o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + dur)
-  } catch (e) {}
+  try { const a = getACtx(), o = a.createOscillator(), g = a.createGain(); o.type = type || 'square'; o.frequency.value = freq; g.gain.value = vol || 0.06; g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur); o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + dur) } catch (e) {}
 }
 function sndAttack() { playBeep(800, 0.1, 'sawtooth', 0.08) }
 function sndHit() { playBeep(200, 0.15, 'square', 0.1) }
@@ -78,830 +92,391 @@ function sndWave() { playBeep(600, 0.3, 'triangle', 0.07); setTimeout(() => play
 
 window._toggleSound = function() {
   soundOn = !soundOn
-  const btn = document.getElementById('btn-sound')
-  btn.textContent = soundOn ? '♫' : '✕'
-  btn.classList.toggle('off', !soundOn)
+  document.getElementById('btn-sound').textContent = soundOn ? '♫' : '✕'
+  document.getElementById('btn-sound').classList.toggle('off', !soundOn)
+  if (soundOn) { bgMusic.play().catch(() => {}) } else { bgMusic.pause() }
 }
+
+// ======================== LIGHTING ========================
+scene.add(new THREE.AmbientLight(0x303050, 0.6))
+const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2)
+dirLight.position.set(5, 12, 8); dirLight.castShadow = true
+dirLight.shadow.mapSize.set(1024, 1024); dirLight.shadow.camera.near = 1; dirLight.shadow.camera.far = 40
+dirLight.shadow.camera.left = -15; dirLight.shadow.camera.right = 15; dirLight.shadow.camera.top = 10; dirLight.shadow.camera.bottom = -5
+scene.add(dirLight)
+scene.add(new THREE.PointLight(0xaabbff, 0.8, 50).translateX(10).translateY(15).translateZ(-8))
+const bounceLight = new THREE.PointLight(0xff6633, 0.3, 20); bounceLight.position.set(0, 0.5, 5); scene.add(bounceLight)
 
 // ======================== ENVIRONMENT ========================
-// Sky sphere
-const skyGeo = new THREE.SphereGeometry(80, 32, 16)
-const skyMat = new THREE.MeshBasicMaterial({
-  color: 0x080818, side: THREE.BackSide
-})
-scene.add(new THREE.Mesh(skyGeo, skyMat))
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(80, 32, 16), new THREE.MeshBasicMaterial({ color: 0x080818, side: THREE.BackSide })))
 
-// Stars
-const starGeo = new THREE.BufferGeometry()
-const starVerts = []
-for (let i = 0; i < 400; i++) {
-  const theta = Math.random() * Math.PI * 2
-  const phi = Math.acos(Math.random() * 2 - 1)
-  const r = 60 + Math.random() * 15
-  starVerts.push(r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta))
-}
-starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3))
+const starGeo = new THREE.BufferGeometry(); const sv = []
+for (let i = 0; i < 400; i++) { const t = Math.random() * Math.PI * 2, p = Math.acos(Math.random() * 2 - 1), r = 60 + Math.random() * 15; sv.push(r * Math.sin(p) * Math.cos(t), r * Math.cos(p), r * Math.sin(p) * Math.sin(t)) }
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(sv, 3))
 scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.3, sizeAttenuation: true })))
 
-// Moon
-const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(2, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffffdd }))
-moonMesh.position.set(15, 20, -30)
-scene.add(moonMesh)
-const moonGlow = new THREE.Mesh(new THREE.SphereGeometry(3.5, 16, 16), new THREE.MeshBasicMaterial({ color: 0xffffdd, transparent: true, opacity: 0.06 }))
-moonGlow.position.copy(moonMesh.position)
-scene.add(moonGlow)
+const moon = new THREE.Mesh(new THREE.SphereGeometry(2, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffffdd })); moon.position.set(15, 20, -30); scene.add(moon)
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(3.5, 16, 16), new THREE.MeshBasicMaterial({ color: 0xffffdd, transparent: true, opacity: 0.06 })).translateX(15).translateY(20).translateZ(-30))
 
 // Ground
-const groundGeo = new THREE.PlaneGeometry(60, 40)
-const groundMat = new THREE.MeshStandardMaterial({ color: 0x4a3a28, roughness: 0.9, metalness: 0.1 })
-const groundMesh = new THREE.Mesh(groundGeo, groundMat)
-groundMesh.rotation.x = -Math.PI / 2
-groundMesh.receiveShadow = true
-scene.add(groundMesh)
+const groundMesh = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: 0x4a3a28, roughness: 0.9, metalness: 0.1 }))
+groundMesh.rotation.x = -Math.PI / 2; groundMesh.receiveShadow = true; scene.add(groundMesh)
+const sandMesh = new THREE.Mesh(new THREE.CircleGeometry(13, 48), new THREE.MeshStandardMaterial({ color: 0x8a7a58, roughness: 0.95 }))
+sandMesh.rotation.x = -Math.PI / 2; sandMesh.position.y = 0.01; sandMesh.receiveShadow = true; scene.add(sandMesh)
+scene.add(new THREE.Mesh(new THREE.TorusGeometry(13, 0.15, 8, 64), new THREE.MeshStandardMaterial({ color: 0x5a4a30, roughness: 0.7 })).rotateX(-Math.PI / 2).translateZ(0.05))
 
-// Arena sand circle
-const sandGeo = new THREE.CircleGeometry(12, 48)
-const sandMat = new THREE.MeshStandardMaterial({ color: 0x8a7a58, roughness: 0.95 })
-const sandMesh = new THREE.Mesh(sandGeo, sandMat)
-sandMesh.rotation.x = -Math.PI / 2
-sandMesh.position.y = 0.01
-sandMesh.receiveShadow = true
-scene.add(sandMesh)
-
-// Arena boundary ring
-const ringGeo = new THREE.TorusGeometry(12, 0.15, 8, 64)
-const ringMat = new THREE.MeshStandardMaterial({ color: 0x5a4a30, roughness: 0.7 })
-const ring = new THREE.Mesh(ringGeo, ringMat)
-ring.rotation.x = -Math.PI / 2
-ring.position.y = 0.05
-scene.add(ring)
-
-// Pillars
-for (let i = 0; i < 12; i++) {
-  const angle = (i / 12) * Math.PI * 2
-  const px = Math.cos(angle) * 14
-  const pz = Math.sin(angle) * 14
-  // Pillar
-  const pillar = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.35, 0.4, 6, 12),
-    new THREE.MeshStandardMaterial({ color: 0x9a8a70, roughness: 0.6 })
-  )
-  pillar.position.set(px, 3, pz)
-  pillar.castShadow = true
-  pillar.receiveShadow = true
-  scene.add(pillar)
-  // Pillar capital
-  const cap = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.5, 0.35, 0.4, 12),
-    new THREE.MeshStandardMaterial({ color: 0xb0a080, roughness: 0.5 })
-  )
-  cap.position.set(px, 6.2, pz)
-  scene.add(cap)
-  // Pillar base
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.5, 0.5, 0.3, 12),
-    new THREE.MeshStandardMaterial({ color: 0x7a6a50, roughness: 0.7 })
-  )
-  base.position.set(px, 0.15, pz)
-  scene.add(base)
+for (let i = 0; i < 14; i++) {
+  const a = (i / 14) * Math.PI * 2, px = Math.cos(a) * 15, pz = Math.sin(a) * 15
+  const p = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 6, 12), new THREE.MeshStandardMaterial({ color: 0x9a8a70, roughness: 0.6 }))
+  p.position.set(px, 3, pz); p.castShadow = true; scene.add(p)
+  const c = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.35, 0.4, 12), new THREE.MeshStandardMaterial({ color: 0xb0a080 }))
+  c.position.set(px, 6.2, pz); scene.add(c)
+  const b = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 12), new THREE.MeshStandardMaterial({ color: 0x7a6a50 }))
+  b.position.set(px, 0.15, pz); scene.add(b)
 }
 
-// ======================== 3D SOLDIER ========================
+// ======================== SOLDIER (3D) ========================
 function createSoldier() {
-  const group = new THREE.Group()
-  const skinMat = new THREE.MeshStandardMaterial({ color: 0xe8b878, roughness: 0.7 })
-  const armorMat = new THREE.MeshStandardMaterial({ color: 0x999088, roughness: 0.4, metalness: 0.5 })
-  const redMat = new THREE.MeshStandardMaterial({ color: 0xcc3333, roughness: 0.6 })
-  const darkRedMat = new THREE.MeshStandardMaterial({ color: 0x882222, roughness: 0.7 })
-  const brownMat = new THREE.MeshStandardMaterial({ color: 0x6B3513, roughness: 0.8 })
-  const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4a030, roughness: 0.3, metalness: 0.7 })
+  const g = new THREE.Group()
+  const skin = new THREE.MeshStandardMaterial({ color: 0xe8b878, roughness: 0.7 })
+  const armor = new THREE.MeshStandardMaterial({ color: 0x999088, roughness: 0.4, metalness: 0.5 })
+  const red = new THREE.MeshStandardMaterial({ color: 0xcc3333, roughness: 0.6 })
+  const brown = new THREE.MeshStandardMaterial({ color: 0x6B3513, roughness: 0.8 })
+  const gold = new THREE.MeshStandardMaterial({ color: 0xd4a030, roughness: 0.3, metalness: 0.7 })
+  const blade = new THREE.MeshStandardMaterial({ color: 0xddddee, roughness: 0.2, metalness: 0.8 })
 
   // Torso
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.4, 1.0, 10), armorMat)
-  torso.position.y = 1.5
-  torso.castShadow = true
-  group.add(torso)
+  g.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.4, 1.0, 10), armor), { position: new THREE.Vector3(0, 1.5, 0) }))
+  g.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.55, 0.5, 10), red), { position: new THREE.Vector3(0, 0.85, 0) }))
+  g.add(Object.assign(new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 8, 20), brown), { position: new THREE.Vector3(0, 1.1, 0), rotation: new THREE.Euler(Math.PI / 2, 0, 0) }))
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.1), gold), { position: new THREE.Vector3(0, 1.1, 0.42) }))
 
-  // Tunic (skirt)
-  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.55, 0.5, 10), redMat)
-  skirt.position.y = 0.85
-  skirt.castShadow = true
-  group.add(skirt)
-
-  // Belt
-  const belt = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 8, 20), brownMat)
-  belt.rotation.x = Math.PI / 2
-  belt.position.y = 1.1
-  group.add(belt)
-  // Belt buckle
-  const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.08), goldMat)
-  buckle.position.set(0, 1.1, 0.42)
-  group.add(buckle)
-
-  // Shoulder pads
-  for (const side of [-1, 1]) {
-    const pad = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), armorMat)
-    pad.position.set(side * 0.55, 1.9, 0)
-    pad.scale.set(1, 0.6, 1)
-    pad.castShadow = true
-    group.add(pad)
-    const stud = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), goldMat)
-    stud.position.set(side * 0.55, 1.92, 0.1)
-    group.add(stud)
+  // Shoulders
+  for (const s of [-1, 1]) {
+    g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), armor), { position: new THREE.Vector3(s * 0.55, 1.9, 0), scale: new THREE.Vector3(1, 0.6, 1) }))
+    g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), gold), { position: new THREE.Vector3(s * 0.55, 1.92, 0.12) }))
   }
 
-  // Head
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), skinMat)
-  head.position.y = 2.35
-  head.castShadow = true
-  group.add(head)
-
-  // Eyes
-  for (const side of [-0.1, 0.1]) {
-    const eyeWhite = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }))
-    eyeWhite.position.set(side, 2.38, 0.25)
-    group.add(eyeWhite)
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), new THREE.MeshBasicMaterial({ color: 0x1a1008 }))
-    pupil.position.set(side, 2.38, 0.28)
-    group.add(pupil)
+  // Head + Face
+  g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 10), skin), { position: new THREE.Vector3(0, 2.35, 0) }))
+  for (const s of [-0.1, 0.1]) {
+    g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff })), { position: new THREE.Vector3(s, 2.38, 0.27) }))
+    g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), new THREE.MeshBasicMaterial({ color: 0x1a1008 })), { position: new THREE.Vector3(s, 2.38, 0.3) }))
   }
 
-  // Mouth (frown)
-  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.015, 4, 8, Math.PI), new THREE.MeshBasicMaterial({ color: 0x5a3020 }))
-  mouth.position.set(0, 2.2, 0.27)
-  mouth.rotation.z = Math.PI
-  group.add(mouth)
-
-  // Helmet
-  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.33, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), armorMat)
-  helmet.position.y = 2.4
-  helmet.castShadow = true
-  group.add(helmet)
-  // Helmet brim
-  const brim = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.04, 6, 20, Math.PI), armorMat)
-  brim.position.set(0, 2.35, 0)
-  brim.rotation.y = Math.PI / 2
-  brim.rotation.x = -0.3
-  group.add(brim)
-  // Plume
-  const plume = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.3), redMat)
-  plume.position.set(0, 2.85, -0.05)
-  plume.castShadow = true
-  group.add(plume)
-  // Plume top (rounded)
-  const plumeTop = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), redMat)
-  plumeTop.position.set(0, 3.1, -0.05)
-  plumeTop.scale.set(0.6, 1, 1.5)
-  group.add(plumeTop)
-  // Cheek guards
-  for (const side of [-1, 1]) {
-    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.25, 0.15), armorMat)
-    guard.position.set(side * 0.32, 2.25, 0.08)
-    group.add(guard)
-  }
+  // Helmet + plume
+  g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.6), armor), { position: new THREE.Vector3(0, 2.4, 0) }))
+  const plume = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.55, 0.35), red)
+  plume.position.set(0, 2.9, -0.05); g.add(plume)
+  g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), red), { position: new THREE.Vector3(0, 3.2, -0.05), scale: new THREE.Vector3(0.6, 1, 1.5) }))
+  for (const s of [-1, 1]) g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.28, 0.16), armor), { position: new THREE.Vector3(s * 0.34, 2.25, 0.08) }))
 
   // Arms
-  const leftArm = new THREE.Group()
-  const lUpperArm = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.5, 8), skinMat)
-  lUpperArm.position.y = -0.25
-  leftArm.add(lUpperArm)
-  const lForearm = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.45, 8), skinMat)
-  lForearm.position.y = -0.6
-  leftArm.add(lForearm)
-  leftArm.position.set(-0.6, 1.85, 0)
-  leftArm.castShadow = true
-  group.add(leftArm)
+  const lArm = new THREE.Group()
+  lArm.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.5, 8), skin), { position: new THREE.Vector3(0, -0.25, 0) }))
+  lArm.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.45, 8), skin), { position: new THREE.Vector3(0, -0.6, 0) }))
+  lArm.position.set(-0.65, 1.85, 0); g.add(lArm)
 
-  const rightArm = new THREE.Group()
-  const rUpperArm = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.5, 8), skinMat)
-  rUpperArm.position.y = -0.25
-  rightArm.add(rUpperArm)
-  const rForearm = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.45, 8), skinMat)
-  rForearm.position.y = -0.6
-  rightArm.add(rForearm)
-  rightArm.position.set(0.6, 1.85, 0)
-  rightArm.castShadow = true
-  group.add(rightArm)
+  const rArm = new THREE.Group()
+  rArm.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.5, 8), skin), { position: new THREE.Vector3(0, -0.25, 0) }))
+  rArm.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.45, 8), skin), { position: new THREE.Vector3(0, -0.6, 0) }))
+  rArm.position.set(0.65, 1.85, 0); g.add(rArm)
 
   // Legs
-  const leftLeg = new THREE.Group()
-  const lThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.5, 8), skinMat)
-  lThigh.position.y = -0.25
-  leftLeg.add(lThigh)
-  const lShin = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.45, 8), skinMat)
-  lShin.position.y = -0.6
-  leftLeg.add(lShin)
-  // Sandal
-  const lFoot = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.06, 0.22), brownMat)
-  lFoot.position.set(0, -0.85, 0.04)
-  leftLeg.add(lFoot)
-  leftLeg.position.set(-0.2, 0.6, 0)
-  leftLeg.castShadow = true
-  group.add(leftLeg)
+  const lLeg = new THREE.Group()
+  lLeg.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.5, 8), skin), { position: new THREE.Vector3(0, -0.25, 0) }))
+  lLeg.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.45, 8), skin), { position: new THREE.Vector3(0, -0.6, 0) }))
+  lLeg.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.07, 0.24), brown), { position: new THREE.Vector3(0, -0.85, 0.04) }))
+  lLeg.position.set(-0.2, 0.6, 0); g.add(lLeg)
 
-  const rightLeg = new THREE.Group()
-  const rThigh = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.5, 8), skinMat)
-  rThigh.position.y = -0.25
-  rightLeg.add(rThigh)
-  const rShin = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.45, 8), skinMat)
-  rShin.position.y = -0.6
-  rightLeg.add(rShin)
-  const rFoot = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.06, 0.22), brownMat)
-  rFoot.position.set(0, -0.85, 0.04)
-  rightLeg.add(rFoot)
-  rightLeg.position.set(0.2, 0.6, 0)
-  rightLeg.castShadow = true
-  group.add(rightLeg)
+  const rLeg = new THREE.Group()
+  rLeg.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.5, 8), skin), { position: new THREE.Vector3(0, -0.25, 0) }))
+  rLeg.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.45, 8), skin), { position: new THREE.Vector3(0, -0.6, 0) }))
+  rLeg.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.07, 0.24), brown), { position: new THREE.Vector3(0, -0.85, 0.04) }))
+  rLeg.position.set(0.2, 0.6, 0); g.add(rLeg)
 
-  // Spear (in left hand)
-  const spearGroup = new THREE.Group()
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.8, 6), brownMat)
-  shaft.castShadow = true
-  spearGroup.add(shaft)
-  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.3, 6), armorMat)
-  tip.position.y = 1.55
-  tip.castShadow = true
-  spearGroup.add(tip)
-  spearGroup.position.set(-0.6, 1.2, 0.3)
-  spearGroup.rotation.x = -0.15
-  group.add(spearGroup)
+  // SPEAR (BIGGER, more visible)
+  const spear = new THREE.Group()
+  spear.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.035, 3.5, 8), brown), {}))
+  spear.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 8), blade), { position: new THREE.Vector3(0, 1.95, 0) }))
+  // Spear glow
+  spear.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.2, 8), new THREE.MeshBasicMaterial({ color: 0xccddff, transparent: true, opacity: 0.2 })), { position: new THREE.Vector3(0, 1.85, 0) }))
+  spear.position.set(-0.65, 1.3, 0.4); spear.rotation.x = -0.15; g.add(spear)
 
-  // Shield (in right hand)
-  const shieldGroup = new THREE.Group()
-  const shieldBody = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.7, 0.5), new THREE.MeshStandardMaterial({ color: 0xcc9922, roughness: 0.4, metalness: 0.3 }))
-  shieldBody.castShadow = true
-  shieldGroup.add(shieldBody)
-  const shieldBoss = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), goldMat)
-  shieldBoss.position.set(0.05, 0, 0)
-  shieldGroup.add(shieldBoss)
-  // Shield red decoration
-  const shieldDeco = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.5, 0.35), darkRedMat)
-  shieldDeco.position.set(0.05, 0, 0)
-  shieldGroup.add(shieldDeco)
-  shieldGroup.position.set(0.65, 1.3, 0.25)
-  group.add(shieldGroup)
+  // SHIELD (BIGGER)
+  const shield = new THREE.Group()
+  shield.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.9, 0.65), new THREE.MeshStandardMaterial({ color: 0xcc9922, roughness: 0.4, metalness: 0.3 })))
+  shield.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), gold), { position: new THREE.Vector3(0.06, 0, 0) }))
+  shield.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.65, 0.45), new THREE.MeshStandardMaterial({ color: 0x882222 })), { position: new THREE.Vector3(0.06, 0, 0) }))
+  // Shield rim glow
+  shield.add(Object.assign(new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.03, 6, 20), gold), { position: new THREE.Vector3(0.06, 0, 0), rotation: new THREE.Euler(0, Math.PI / 2, 0) }))
+  shield.position.set(0.7, 1.3, 0.3); g.add(shield)
 
-  group.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true } })
-
-  return { group, leftArm, rightArm, leftLeg, rightLeg, spearGroup, shieldGroup, head, plume }
+  g.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true } })
+  return { group: g, lArm, rArm, lLeg, rLeg, spear, shield, plume }
 }
 
-// ======================== 3D BEAST ========================
+// ======================== BEAST (3D) ========================
 function createBeast() {
-  const group = new THREE.Group()
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3a3035, roughness: 0.7 })
-  const darkMat = new THREE.MeshStandardMaterial({ color: 0x2a2025, roughness: 0.8 })
-  const clawMat = new THREE.MeshStandardMaterial({ color: 0xccccaa, roughness: 0.5 })
+  const g = new THREE.Group()
+  const bMat = new THREE.MeshStandardMaterial({ color: 0x3a3035, roughness: 0.7 })
+  const dMat = new THREE.MeshStandardMaterial({ color: 0x2a2025, roughness: 0.8 })
+  const claw = new THREE.MeshStandardMaterial({ color: 0xccccaa, roughness: 0.5 })
 
-  // Body
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.8, 12, 10), bodyMat)
-  body.scale.set(1.2, 0.9, 1.0)
-  body.position.y = 1.2
-  body.castShadow = true
-  group.add(body)
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.85, 12, 10), bMat)
+  body.scale.set(1.2, 0.9, 1.0); body.position.y = 1.2; g.add(body)
+  g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), new THREE.MeshStandardMaterial({ color: 0x6a5a50, roughness: 0.8 })), { position: new THREE.Vector3(0, 1.0, 0.3), scale: new THREE.Vector3(0.8, 0.7, 0.6) }))
 
-  // Belly (lighter)
-  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), new THREE.MeshStandardMaterial({ color: 0x6a5a50, roughness: 0.8 }))
-  belly.position.set(0, 1.0, 0.3)
-  belly.scale.set(0.8, 0.7, 0.6)
-  group.add(belly)
+  const head = new THREE.Group()
+  head.add(new THREE.Mesh(new THREE.SphereGeometry(0.58, 12, 10), bMat))
+  head.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 6), dMat), { position: new THREE.Vector3(0, -0.1, 0.42), scale: new THREE.Vector3(0.9, 0.7, 1.2) }))
+  head.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), new THREE.MeshBasicMaterial({ color: 0x0a0505 })), { position: new THREE.Vector3(0, -0.02, 0.62) }))
 
-  // Head
-  const headGroup = new THREE.Group()
-  const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 10), bodyMat)
-  headMesh.castShadow = true
-  headGroup.add(headMesh)
-
-  // Snout
-  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 6), darkMat)
-  snout.position.set(0, -0.1, 0.4)
-  snout.scale.set(0.9, 0.7, 1.2)
-  headGroup.add(snout)
-  // Nose
-  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), new THREE.MeshBasicMaterial({ color: 0x0a0505 }))
-  nose.position.set(0, -0.02, 0.6)
-  headGroup.add(nose)
-
-  // Jaw (opens when attacking)
   const jaw = new THREE.Group()
-  const jawMesh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6, 0, Math.PI * 2, Math.PI * 0.5), darkMat)
-  jawMesh.position.set(0, 0, 0.3)
-  jawMesh.scale.set(0.8, 0.5, 1)
-  jaw.add(jawMesh)
-  // Fangs
-  for (const side of [-0.08, 0.08]) {
-    const fang = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.15, 4), clawMat)
-    fang.position.set(side, -0.12, 0.35)
-    fang.rotation.x = 0.2
-    jaw.add(fang)
+  jaw.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6, 0, Math.PI * 2, Math.PI * 0.5), dMat), { position: new THREE.Vector3(0, 0, 0.3), scale: new THREE.Vector3(0.8, 0.5, 1) }))
+  for (const s of [-0.08, 0.08]) jaw.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.18, 4), claw), { position: new THREE.Vector3(s, -0.14, 0.36), rotation: new THREE.Euler(0.2, 0, 0) }))
+  jaw.position.y = -0.15; head.add(jaw)
+  for (const s of [-0.1, 0.1]) head.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.14, 4), claw), { position: new THREE.Vector3(s, -0.22, 0.47) }))
+
+  // EYES (bigger, brighter glow)
+  for (const s of [-0.22, 0.22]) {
+    head.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), new THREE.MeshBasicMaterial({ color: 0x1a1008 })), { position: new THREE.Vector3(s, 0.1, 0.42) }))
+    head.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), new THREE.MeshStandardMaterial({ color: 0xffee22, emissive: 0xffcc00, emissiveIntensity: 3 })), { position: new THREE.Vector3(s, 0.1, 0.45) }))
+    head.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), new THREE.MeshBasicMaterial({ color: 0x0a0000 })), { position: new THREE.Vector3(s, 0.1, 0.5), scale: new THREE.Vector3(0.5, 1, 1) }))
+    const el = new THREE.PointLight(0xffcc00, 0.5, 4); el.position.set(s, 0.1, 0.55); head.add(el)
   }
-  jaw.position.set(0, -0.15, 0)
-  headGroup.add(jaw)
+  for (const s of [-1, 1]) head.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.28, 4), bMat), { position: new THREE.Vector3(s * 0.32, 0.48, 0.1), rotation: new THREE.Euler(0, 0, s * -0.4) }))
+  for (let i = 0; i < 6; i++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.3, 4), dMat); const a = (i / 6) * Math.PI - Math.PI * 0.5; sp.position.set(Math.sin(a) * 0.38, 0.42 + Math.cos(a) * 0.15, -0.1); sp.rotation.set(-0.3, 0, a * 0.5); head.add(sp) }
+  head.position.set(0, 1.95, 0.3); g.add(head)
 
-  // Upper fangs
-  for (const side of [-0.1, 0.1]) {
-    const fang = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.12, 4), clawMat)
-    fang.position.set(side, -0.2, 0.45)
-    headGroup.add(fang)
-  }
+  // Wings (bigger)
+  const wMat = new THREE.MeshStandardMaterial({ color: 0x2a2530, roughness: 0.7, side: THREE.DoubleSide })
+  const lw = new THREE.Group()
+  const ls = new THREE.Shape(); ls.moveTo(0, 0); ls.lineTo(-0.4, 1.0); ls.lineTo(-1.5, 0.7); ls.lineTo(-1.8, 0.2); ls.lineTo(-1.4, -0.3); ls.lineTo(-0.5, -0.1); ls.lineTo(0, 0)
+  lw.add(new THREE.Mesh(new THREE.ShapeGeometry(ls), wMat)); lw.position.set(-0.7, 1.5, -0.2); lw.rotation.y = -0.3; g.add(lw)
+  const rw = new THREE.Group()
+  const rs = new THREE.Shape(); rs.moveTo(0, 0); rs.lineTo(0.4, 1.0); rs.lineTo(1.5, 0.7); rs.lineTo(1.8, 0.2); rs.lineTo(1.4, -0.3); rs.lineTo(0.5, -0.1); rs.lineTo(0, 0)
+  rw.add(new THREE.Mesh(new THREE.ShapeGeometry(rs), wMat)); rw.position.set(0.7, 1.5, -0.2); rw.rotation.y = 0.3; g.add(rw)
 
-  // Eyes (glowing yellow!)
-  for (const side of [-0.2, 0.2]) {
-    const eyeSocket = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), new THREE.MeshBasicMaterial({ color: 0x1a1008 }))
-    eyeSocket.position.set(side, 0.1, 0.4)
-    headGroup.add(eyeSocket)
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), new THREE.MeshStandardMaterial({ color: 0xffee22, emissive: 0xffcc00, emissiveIntensity: 2 }))
-    eye.position.set(side, 0.1, 0.43)
-    headGroup.add(eye)
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), new THREE.MeshBasicMaterial({ color: 0x0a0000 }))
-    pupil.position.set(side, 0.1, 0.48)
-    pupil.scale.set(0.5, 1, 1)
-    headGroup.add(pupil)
-    // Eye glow light
-    const eyeLight = new THREE.PointLight(0xffcc00, 0.3, 3)
-    eyeLight.position.set(side, 0.1, 0.5)
-    headGroup.add(eyeLight)
-  }
+  // Claws
+  const lC = new THREE.Group()
+  lC.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.07, 0.65, 6), bMat), { position: new THREE.Vector3(0, -0.32, 0) }))
+  for (let i = -1; i <= 1; i++) lC.add(Object.assign(new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.18, 4), claw), { position: new THREE.Vector3(i * 0.04, -0.7, 0), rotation: new THREE.Euler(0.3, 0, 0) }))
+  lC.position.set(-0.75, 1.1, 0.45); lC.rotation.x = 0.5; g.add(lC)
+  const rC = lC.clone(); rC.position.set(0.75, 1.1, 0.45); g.add(rC)
 
-  // Ears
-  for (const side of [-1, 1]) {
-    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.25, 4), bodyMat)
-    ear.position.set(side * 0.3, 0.45, 0.1)
-    ear.rotation.z = side * -0.4
-    headGroup.add(ear)
-  }
+  for (const s of [-1, 1]) { g.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.09, 0.7, 6), bMat), { position: new THREE.Vector3(s * 0.42, 0.35, -0.3) })); g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 6), dMat), { position: new THREE.Vector3(s * 0.42, 0, -0.25), scale: new THREE.Vector3(1, 0.5, 1.3) })) }
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.025, 1.0, 6), bMat); tail.position.set(0, 0.9, -0.85); tail.rotation.x = 0.8; g.add(tail)
 
-  // Spiky hair/mane
-  for (let i = 0; i < 6; i++) {
-    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.25 + Math.random() * 0.15, 4), darkMat)
-    const angle = (i / 6) * Math.PI - Math.PI * 0.5
-    spike.position.set(Math.sin(angle) * 0.35, 0.4 + Math.cos(angle) * 0.15, -0.1)
-    spike.rotation.z = angle * 0.5
-    spike.rotation.x = -0.3
-    headGroup.add(spike)
-  }
-
-  headGroup.position.set(0, 1.9, 0.3)
-  group.add(headGroup)
-
-  // Wings
-  const wingMat = new THREE.MeshStandardMaterial({ color: 0x2a2530, roughness: 0.7, side: THREE.DoubleSide })
-  const leftWing = new THREE.Group()
-  // Wing membrane
-  const wingShape = new THREE.Shape()
-  wingShape.moveTo(0, 0)
-  wingShape.lineTo(-0.3, 0.8)
-  wingShape.lineTo(-1.2, 0.6)
-  wingShape.lineTo(-1.5, 0.2)
-  wingShape.lineTo(-1.2, -0.2)
-  wingShape.lineTo(-0.4, -0.1)
-  wingShape.lineTo(0, 0)
-  const wingGeo = new THREE.ShapeGeometry(wingShape)
-  const lWing = new THREE.Mesh(wingGeo, wingMat)
-  lWing.castShadow = true
-  leftWing.add(lWing)
-  leftWing.position.set(-0.6, 1.5, -0.2)
-  leftWing.rotation.y = -0.3
-  group.add(leftWing)
-
-  const rightWing = new THREE.Group()
-  const rWingShape = new THREE.Shape()
-  rWingShape.moveTo(0, 0)
-  rWingShape.lineTo(0.3, 0.8)
-  rWingShape.lineTo(1.2, 0.6)
-  rWingShape.lineTo(1.5, 0.2)
-  rWingShape.lineTo(1.2, -0.2)
-  rWingShape.lineTo(0.4, -0.1)
-  rWingShape.lineTo(0, 0)
-  const rWing = new THREE.Mesh(new THREE.ShapeGeometry(rWingShape), wingMat)
-  rWing.castShadow = true
-  rightWing.add(rWing)
-  rightWing.position.set(0.6, 1.5, -0.2)
-  rightWing.rotation.y = 0.3
-  group.add(rightWing)
-
-  // Front claws/arms
-  const leftClaw = new THREE.Group()
-  const lClawArm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.06, 0.6, 6), bodyMat)
-  lClawArm.position.y = -0.3
-  leftClaw.add(lClawArm)
-  for (let i = -1; i <= 1; i++) {
-    const claw = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.15, 4), clawMat)
-    claw.position.set(i * 0.04, -0.65, 0)
-    claw.rotation.x = 0.3
-    leftClaw.add(claw)
-  }
-  leftClaw.position.set(-0.7, 1.1, 0.4)
-  leftClaw.rotation.x = 0.5
-  group.add(leftClaw)
-
-  const rightClaw = new THREE.Group()
-  const rClawArm = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.06, 0.6, 6), bodyMat)
-  rClawArm.position.y = -0.3
-  rightClaw.add(rClawArm)
-  for (let i = -1; i <= 1; i++) {
-    const claw = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.15, 4), clawMat)
-    claw.position.set(i * 0.04, -0.65, 0)
-    claw.rotation.x = 0.3
-    rightClaw.add(claw)
-  }
-  rightClaw.position.set(0.7, 1.1, 0.4)
-  rightClaw.rotation.x = 0.5
-  group.add(rightClaw)
-
-  // Hind legs
-  for (const side of [-1, 1]) {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.7, 6), bodyMat)
-    leg.position.set(side * 0.4, 0.35, -0.3)
-    leg.castShadow = true
-    group.add(leg)
-    const paw = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), darkMat)
-    paw.position.set(side * 0.4, 0, -0.25)
-    paw.scale.set(1, 0.5, 1.3)
-    group.add(paw)
-  }
-
-  // Tail
-  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.02, 0.8, 6), bodyMat)
-  tail.position.set(0, 0.9, -0.8)
-  tail.rotation.x = 0.8
-  tail.castShadow = true
-  group.add(tail)
-
-  group.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true } })
-
-  return { group, headGroup, jaw, leftWing, rightWing, leftClaw, rightClaw, body, tail }
+  g.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true } })
+  return { group: g, head, jaw, lw, rw, lC, rC, body, tail }
 }
 
 // ======================== INSTANTIATE ========================
-const soldier = createSoldier()
-soldier.group.position.set(-4, 0, 0)
-scene.add(soldier.group)
-
-const beast = createBeast()
-beast.group.position.set(10, 0, 0)
-scene.add(beast.group)
+const soldier = createSoldier(); soldier.group.position.set(-4, 0, 0); scene.add(soldier.group)
+const beast = createBeast(); beast.group.position.set(10, 0, 0); scene.add(beast.group)
 
 // ======================== WEAPONS ========================
-const WEAPONS = [
-  { name: '劍', dmg: 15, range: 2.8, cd: 0.3 },
-  { name: '矛', dmg: 20, range: 4.0, cd: 0.5 },
-  { name: '弓', dmg: 12, range: 12.0, cd: 0.6 }
-]
-let currentWeapon = 0
-const weaponEl = document.getElementById('weapon-display')
-function switchWeapon() {
-  currentWeapon = (currentWeapon + 1) % WEAPONS.length
-  weaponEl.textContent = '武器：' + WEAPONS[currentWeapon].name
-  sndSwitch()
-}
+const WEAPONS = [{ name: '劍', dmg: 15, range: 2.8, cd: 0.3 }, { name: '矛', dmg: 20, range: 4.0, cd: 0.5 }, { name: '弓', dmg: 12, range: 12, cd: 0.6 }]
+let curWpn = 0; const wpnEl = document.getElementById('weapon-display')
+function switchWpn() { curWpn = (curWpn + 1) % WEAPONS.length; wpnEl.textContent = '武器：' + WEAPONS[curWpn].name; sndSwitch() }
 
-// Projectiles
-const arrowGroup = new THREE.Group()
-scene.add(arrowGroup)
-const arrows = []
+const arrowGrp = new THREE.Group(); scene.add(arrowGrp); const arrows = []
+const partGrp = new THREE.Group(); scene.add(partGrp); const parts = []
+function spawnP(x, y, z, col, n) { for (let i = 0; i < n; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.06 + Math.random() * 0.04, 4, 4), new THREE.MeshBasicMaterial({ color: col, transparent: true })); m.position.set(x, y, z); partGrp.add(m); parts.push({ mesh: m, vx: (Math.random() - 0.5) * 5, vy: Math.random() * 4 + 1, vz: (Math.random() - 0.5) * 5, life: 0.4 + Math.random() * 0.3 }) } }
 
-// ======================== PARTICLES ========================
-const particleGroup = new THREE.Group()
-scene.add(particleGroup)
-const particles = []
-function spawnParticles3D(x, y, z, color, count) {
-  for (let i = 0; i < count; i++) {
-    const geo = new THREE.SphereGeometry(0.06 + Math.random() * 0.04, 4, 4)
-    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 })
-    const mesh = new THREE.Mesh(geo, mat)
-    mesh.position.set(x, y, z)
-    particleGroup.add(mesh)
-    particles.push({ mesh, vx: (Math.random() - 0.5) * 5, vy: Math.random() * 4 + 1, vz: (Math.random() - 0.5) * 5, life: 0.4 + Math.random() * 0.3 })
-  }
-}
-
-// ======================== GAME STATE ========================
-const GROUND_Y = 0
-const GRAVITY = -22
-const JUMP_VEL = 9
-const MOVE_SPD = 6
-const BEAST_SPD = 4
-const BEAST_DMG = 8
-const BEAST_CHARGE_SPD = 8
-
-const state = {
-  px: -4, py: GROUND_Y, pvy: 0, php: 100, pmaxhp: 100,
-  pFace: 1, attacking: false, atkTimer: 0, pHitCD: 0, atkCD: 0,
-  bx: 10, by: GROUND_Y, bz: 0, bhp: 80, bmaxhp: 80,
-  bFace: -1, bState: 'approach', bTimer: 0, bHitCD: 0, bChargeDir: 0,
-  wave: 1, gameOver: false, started: false,
-  shakeTimer: 0, shakeInt: 0, slowMo: 1
-}
+// ======================== STATE ========================
+const GY = 0, GRAV = -22, JV = 9, MSPD = 6, BSPD = 4, BDMG = 8, BCSPD = 8
+const st = { px: -4, py: 0, pz: 0, pvy: 0, php: 100, pmhp: 100, pFace: 0, atk: false, atkT: 0, pHitCD: 0, atkCD: 0, bx: 10, by: 0, bz: 0, bhp: 80, bmhp: 80, bFace: -1, bSt: 'approach', bT: 0, bHitCD: 0, bDir: 0, wave: 1, over: false, started: false, shake: 0, shakeI: 0, slowMo: 1 }
 
 // ======================== INPUT ========================
-const keys = {}
-let switchPressed = false, atkPressed = false
-window.addEventListener('keydown', e => {
-  keys[e.code] = true
-  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault()
-  if (actx && actx.state === 'suspended') actx.resume()
-})
+const keys = {}; let swP = false, atkP = false
+window.addEventListener('keydown', e => { keys[e.code] = true; if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault(); try { getACtx().resume() } catch (e2) {} })
 window.addEventListener('keyup', e => { keys[e.code] = false })
 
-const mk = { left: false, right: false, jump: false, attack: false, weapon: false }
-function setupBtn(id, key) {
-  const el = document.getElementById(id)
-  if (!el) return
-  function on(e) { e.preventDefault(); e.stopPropagation(); mk[key] = true; el.classList.add('pressed') }
-  function off(e) { if(e) e.preventDefault(); mk[key] = false; el.classList.remove('pressed') }
-  el.addEventListener('touchstart', on, { passive: false })
-  el.addEventListener('touchend', off, { passive: false })
-  el.addEventListener('touchcancel', off, { passive: false })
-  el.addEventListener('mousedown', on)
-  el.addEventListener('mouseup', off)
-  el.addEventListener('mouseleave', off)
-}
-setupBtn('btn-left', 'left'); setupBtn('btn-right', 'right')
-setupBtn('btn-jump', 'jump'); setupBtn('btn-attack', 'attack'); setupBtn('btn-weapon', 'weapon')
+const mk = { attack: false, jump: false, weapon: false }
+function sBtn(id, key) { const el = document.getElementById(id); if (!el) return; function on(e) { e.preventDefault(); e.stopPropagation(); mk[key] = true; el.classList.add('pressed') } function off() { mk[key] = false; el.classList.remove('pressed') } el.addEventListener('touchstart', on, { passive: false }); el.addEventListener('touchend', e => { e.preventDefault(); off() }, { passive: false }); el.addEventListener('touchcancel', off); el.addEventListener('mousedown', on); el.addEventListener('mouseup', off); el.addEventListener('mouseleave', off) }
+sBtn('btn-attack', 'attack'); sBtn('btn-jump', 'jump'); sBtn('btn-weapon', 'weapon')
 
-function isDown(a) {
-  switch (a) {
-    case 'left': return keys['ArrowLeft'] || keys['KeyA'] || mk.left
-    case 'right': return keys['ArrowRight'] || keys['KeyD'] || mk.right
-    case 'jump': return keys['ArrowUp'] || keys['KeyW'] || mk.jump
-    case 'attack': return keys['Space'] || keys['KeyJ'] || mk.attack
-    case 'weapon': return keys['KeyQ'] || mk.weapon
+// VIRTUAL JOYSTICK
+const joyZone = document.getElementById('joystick-zone')
+const joyBase = document.getElementById('joystick-base')
+const joyKnob = document.getElementById('joystick-knob')
+let joyActive = false, joyId = null, joyBX = 0, joyBY = 0, joyDX = 0, joyDY = 0
+joyZone.addEventListener('touchstart', e => {
+  if (joyActive) return; const t = e.changedTouches[0]; joyActive = true; joyId = t.identifier
+  joyBX = t.clientX; joyBY = t.clientY; joyDX = 0; joyDY = 0
+  joyBase.style.display = 'block'; joyBase.style.left = (joyBX - 60) + 'px'; joyBase.style.top = (joyBY - 60) + 'px'
+  joyKnob.style.display = 'block'; joyKnob.style.left = (joyBX - 25) + 'px'; joyKnob.style.top = (joyBY - 25) + 'px'
+  e.preventDefault()
+}, { passive: false })
+joyZone.addEventListener('touchmove', e => {
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i]; if (t.identifier !== joyId) continue
+    let dx = t.clientX - joyBX, dy = t.clientY - joyBY; const d = Math.hypot(dx, dy), mx = 55
+    if (d > mx) { dx = dx / d * mx; dy = dy / d * mx }
+    joyDX = dx / mx; joyDY = dy / mx
+    joyKnob.style.left = (joyBX + dx - 25) + 'px'; joyKnob.style.top = (joyBY + dy - 25) + 'px'
   }
+  e.preventDefault()
+}, { passive: false })
+function joyEnd(e) { for (let i = 0; i < e.changedTouches.length; i++) { if (e.changedTouches[i].identifier === joyId) { joyActive = false; joyDX = 0; joyDY = 0; joyBase.style.display = 'none'; joyKnob.style.display = 'none' } } }
+joyZone.addEventListener('touchend', joyEnd, { passive: true })
+joyZone.addEventListener('touchcancel', joyEnd, { passive: true })
+
+function getMove() {
+  let mx = 0, mz = 0
+  if (keys['ArrowLeft'] || keys['KeyA']) mx -= 1
+  if (keys['ArrowRight'] || keys['KeyD']) mx += 1
+  if (keys['ArrowUp'] || keys['KeyW']) mz -= 1
+  if (keys['ArrowDown'] || keys['KeyS']) mz += 1
+  // Add joystick
+  mx += joyDX; mz += joyDY
+  const mag = Math.hypot(mx, mz)
+  if (mag > 1) { mx /= mag; mz /= mag }
+  return { mx, mz }
 }
 
 // ======================== UI ========================
-const playerHPEl = document.getElementById('player-hp')
-const beastHPEl = document.getElementById('beast-hp')
-const waveEl = document.getElementById('wave-display')
-const overlayEl = document.getElementById('overlay')
-const overlayTitle = document.getElementById('overlay-title')
-const overlaySub = document.getElementById('overlay-sub')
-const menuEl = document.getElementById('menu')
-
-function updateUI() {
-  playerHPEl.style.width = Math.max(0, state.php / state.pmaxhp * 100) + '%'
-  beastHPEl.style.width = Math.max(0, state.bhp / state.bmaxhp * 100) + '%'
-  waveEl.textContent = '第 ' + state.wave + ' 波'
-}
-
-function showOverlay(t, s, w) {
-  overlayEl.classList.add('show'); overlayTitle.textContent = t
-  overlayTitle.className = w ? 'win' : 'lose'; overlaySub.textContent = s
-}
-
-window._startGame = function() {
-  menuEl.classList.add('hidden'); state.started = true; resetState()
-  try { getAudioCtx().resume() } catch(e) {}
-}
-window._backToMenu = function() {
-  overlayEl.classList.remove('show'); menuEl.classList.remove('hidden')
-  state.started = false; state.gameOver = false
-}
-window._restartGame = function() { overlayEl.classList.remove('show'); resetState() }
-
-function resetState() {
-  state.px = -4; state.py = GROUND_Y; state.pvy = 0; state.php = state.pmaxhp
-  state.attacking = false; state.atkCD = 0
-  state.bx = 10; state.by = GROUND_Y; state.bz = 0
-  state.bmaxhp = 80; state.bhp = state.bmaxhp
-  state.bState = 'approach'; state.bTimer = 0; state.wave = 1
-  state.gameOver = false; state.shakeTimer = 0; state.slowMo = 1
-  currentWeapon = 0; weaponEl.textContent = '武器：劍'
-  for (const a of arrows) { arrowGroup.remove(a.mesh); a.mesh.geometry.dispose() }
-  arrows.length = 0
-  updateUI()
-}
+const phpEl = document.getElementById('player-hp'), bhpEl = document.getElementById('beast-hp'), waveEl = document.getElementById('wave-display')
+const olEl = document.getElementById('overlay'), olT = document.getElementById('overlay-title'), olS = document.getElementById('overlay-sub'), menuEl = document.getElementById('menu')
+function uUI() { phpEl.style.width = Math.max(0, st.php / st.pmhp * 100) + '%'; bhpEl.style.width = Math.max(0, st.bhp / st.bmhp * 100) + '%'; waveEl.textContent = '第 ' + st.wave + ' 波' }
+function showOL(t, s, w) { olEl.classList.add('show'); olT.textContent = t; olT.className = w ? 'win' : 'lose'; olS.textContent = s }
+window._startGame = function() { menuEl.classList.add('hidden'); st.started = true; reset(); startMusic(); try { getACtx().resume() } catch (e) {} }
+window._backToMenu = function() { olEl.classList.remove('show'); menuEl.classList.remove('hidden'); st.started = false; st.over = false }
+window._restartGame = function() { olEl.classList.remove('show'); reset() }
+function reset() { st.px = -4; st.py = GY; st.pz = 0; st.pvy = 0; st.php = st.pmhp; st.atk = false; st.atkCD = 0; st.bx = 10; st.by = GY; st.bz = 0; st.bmhp = 80; st.bhp = st.bmhp; st.bSt = 'approach'; st.bT = 0; st.wave = 1; st.over = false; st.shake = 0; st.slowMo = 1; curWpn = 0; wpnEl.textContent = '武器：劍'; for (const a of arrows) { arrowGrp.remove(a.mesh) }; arrows.length = 0; uUI() }
 
 // ======================== GAME LOGIC ========================
-function updatePlayer(dt) {
-  if (state.gameOver || !state.started) return
-  let mx = 0
-  if (isDown('left')) mx -= 1
-  if (isDown('right')) mx += 1
-  state.px += mx * MOVE_SPD * dt
-  state.px = Math.max(-11, Math.min(11, state.px))
-  if (mx !== 0) state.pFace = mx > 0 ? 1 : -1
+function upPlayer(dt) {
+  if (st.over || !st.started) return
+  const { mx, mz } = getMove()
+  // Move relative to camera angle
+  const moveAngle = camAngle
+  const fx = mx * Math.cos(moveAngle) - mz * Math.sin(moveAngle)
+  const fz = mx * Math.sin(moveAngle) + mz * Math.cos(moveAngle)
+  st.px += fx * MSPD * dt; st.pz += fz * MSPD * dt
+  // Clamp to arena
+  const ad = Math.hypot(st.px, st.pz); if (ad > 12) { st.px = st.px / ad * 12; st.pz = st.pz / ad * 12 }
+  // Face direction of movement
+  if (Math.abs(fx) > 0.1 || Math.abs(fz) > 0.1) st.pFace = Math.atan2(fx, fz)
 
-  if (isDown('jump') && state.py <= GROUND_Y + 0.05) state.pvy = JUMP_VEL
-  state.pvy += GRAVITY * dt
-  state.py += state.pvy * dt
-  if (state.py < GROUND_Y) { state.py = GROUND_Y; state.pvy = 0 }
+  const jump = keys['Space'] && !keys['KeyJ'] ? false : (keys['ArrowUp'] || keys['KeyW'] || mk.jump)
+  // Jump only if not moving forward (W is move, so use dedicated jump)
+  if (mk.jump && st.py <= GY + 0.05) st.pvy = JV
+  if (keys['Space'] && st.py <= GY + 0.05 && !st.atk) {} // space is attack
+  st.pvy += GRAV * dt; st.py += st.pvy * dt; if (st.py < GY) { st.py = GY; st.pvy = 0 }
 
-  if (isDown('weapon') && !switchPressed) { switchWeapon(); switchPressed = true }
-  if (!isDown('weapon')) switchPressed = false
+  if ((mk.weapon || keys['KeyQ']) && !swP) { switchWpn(); swP = true }
+  if (!mk.weapon && !keys['KeyQ']) swP = false
+  if (st.atkCD > 0) st.atkCD -= dt
 
-  if (state.atkCD > 0) state.atkCD -= dt
-
-  const wp = WEAPONS[currentWeapon]
-  if (isDown('attack') && !atkPressed && !state.attacking && state.atkCD <= 0) {
-    state.attacking = true; state.atkTimer = 0.25; state.atkCD = wp.cd; atkPressed = true; sndAttack()
-    if (currentWeapon === 2) {
-      // Bow: spawn arrow
-      const arrowGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.8, 4)
-      const arrowMat = new THREE.MeshStandardMaterial({ color: 0xccaa66 })
-      const arrowMesh = new THREE.Mesh(arrowGeo, arrowMat)
-      arrowMesh.rotation.z = Math.PI / 2
-      arrowMesh.position.set(state.px + state.pFace * 0.8, state.py + 1.5, 0)
-      arrowGroup.add(arrowMesh)
-      arrows.push({ mesh: arrowMesh, vx: state.pFace * 18, life: 2, dmg: wp.dmg + state.wave * 2 })
+  const wp = WEAPONS[curWpn]
+  const atkDown = keys['KeyJ'] || keys['Space'] || mk.attack
+  if (atkDown && !atkP && !st.atk && st.atkCD <= 0) {
+    st.atk = true; st.atkT = 0.25; st.atkCD = wp.cd; atkP = true; sndAttack()
+    if (curWpn === 2) {
+      const dir = new THREE.Vector3(Math.sin(st.pFace), 0, Math.cos(st.pFace))
+      const am = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.0, 4), new THREE.MeshStandardMaterial({ color: 0xccaa66 }))
+      am.rotation.z = Math.PI / 2; am.rotation.y = st.pFace
+      am.position.set(st.px + dir.x * 0.8, st.py + 1.5, st.pz + dir.z * 0.8)
+      arrowGrp.add(am); arrows.push({ mesh: am, vx: dir.x * 20, vz: dir.z * 20, life: 2, dmg: wp.dmg + st.wave * 2 })
     } else {
-      const dx = state.bx - state.px, dz = state.bz, dy = (state.by + 1.2) - (state.py + 1.2)
+      const dx = st.bx - st.px, dz = st.bz - st.pz, dy = (st.by + 1.2) - (st.py + 1.2)
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
-      if (dist < wp.range && state.bHitCD <= 0) {
-        state.bhp -= (wp.dmg + state.wave * 2); state.bHitCD = 0.25; sndHit()
-        spawnParticles3D(state.bx, state.by + 1.5, state.bz, 0xffcc00, 10)
-        state.shakeTimer = 0.12; state.shakeInt = 0.08
-        if (state.bhp <= 0) { spawnParticles3D(state.bx, state.by + 1.5, state.bz, 0xff4400, 20); state.slowMo = 0.2; setTimeout(() => { state.slowMo = 1 }, 600); nextWave() }
+      if (dist < wp.range && st.bHitCD <= 0) {
+        st.bhp -= (wp.dmg + st.wave * 2); st.bHitCD = 0.25; sndHit()
+        spawnP(st.bx, st.by + 1.5, st.bz, 0xffcc00, 10); st.shake = 0.12; st.shakeI = 0.08
+        if (st.bhp <= 0) { spawnP(st.bx, st.by + 1.5, st.bz, 0xff4400, 20); st.slowMo = 0.2; setTimeout(() => { st.slowMo = 1 }, 600); nxtWave() }
       }
     }
-    spawnParticles3D(state.px + state.pFace * 1, state.py + 1.5, 0, 0xffffff, 4)
+    spawnP(st.px + Math.sin(st.pFace) * 1, st.py + 1.5, st.pz + Math.cos(st.pFace) * 1, 0xffffff, 4)
   }
-  if (!isDown('attack')) atkPressed = false
-  if (state.attacking) { state.atkTimer -= dt; if (state.atkTimer <= 0) state.attacking = false }
-  if (state.pHitCD > 0) state.pHitCD -= dt
+  if (!atkDown) atkP = false
+  if (st.atk) { st.atkT -= dt; if (st.atkT <= 0) st.atk = false }
+  if (st.pHitCD > 0) st.pHitCD -= dt
 }
 
-function updateArrows(dt) {
+function upArrows(dt) {
   for (let i = arrows.length - 1; i >= 0; i--) {
-    const a = arrows[i]
-    a.mesh.position.x += a.vx * dt; a.life -= dt
-    if (state.bhp > 0) {
-      const dx = a.mesh.position.x - state.bx, dy = a.mesh.position.y - (state.by + 1.2), dz = a.mesh.position.z - state.bz
-      if (Math.sqrt(dx * dx + dy * dy + dz * dz) < 1.5 && state.bHitCD <= 0) {
-        state.bhp -= a.dmg; state.bHitCD = 0.25; sndHit()
-        spawnParticles3D(state.bx, state.by + 1.5, state.bz, 0xffcc00, 8)
-        state.shakeTimer = 0.1; state.shakeInt = 0.06
-        if (state.bhp <= 0) { spawnParticles3D(state.bx, state.by + 1.5, state.bz, 0xff4400, 20); state.slowMo = 0.2; setTimeout(() => { state.slowMo = 1 }, 600); nextWave() }
-        a.life = 0
-      }
+    const a = arrows[i]; a.mesh.position.x += a.vx * dt; a.mesh.position.z += a.vz * dt; a.life -= dt
+    if (st.bhp > 0) { const dx = a.mesh.position.x - st.bx, dy = a.mesh.position.y - (st.by + 1.2), dz = a.mesh.position.z - st.bz; if (Math.sqrt(dx * dx + dy * dy + dz * dz) < 1.5 && st.bHitCD <= 0) { st.bhp -= a.dmg; st.bHitCD = 0.25; sndHit(); spawnP(st.bx, st.by + 1.5, st.bz, 0xffcc00, 8); st.shake = 0.1; st.shakeI = 0.06; if (st.bhp <= 0) { spawnP(st.bx, st.by + 1.5, st.bz, 0xff4400, 20); st.slowMo = 0.2; setTimeout(() => { st.slowMo = 1 }, 600); nxtWave() }; a.life = 0 } }
+    if (a.life <= 0 || Math.hypot(a.mesh.position.x, a.mesh.position.z) > 20) { arrowGrp.remove(a.mesh); arrows.splice(i, 1) }
+  }
+}
+
+function upBeast(dt) {
+  if (st.over || st.bhp <= 0 || !st.started) return
+  st.bT -= dt; if (st.bHitCD > 0) st.bHitCD -= dt
+  const dx = st.px - st.bx, dz = st.pz - st.bz, dist = Math.sqrt(dx * dx + dz * dz)
+  st.bFace = Math.atan2(dx, dz)
+
+  if (st.bSt === 'approach') {
+    const spd = BSPD * dt; if (dist > 0.1) { st.bx += (dx / dist) * spd; st.bz += (dz / dist) * spd }
+    st.by = GY + Math.abs(Math.sin(performance.now() / 250)) * 0.4
+    if (dist < 5) { st.bSt = 'windup'; st.bT = 0.4 + Math.random() * 0.3 }
+  } else if (st.bSt === 'windup') {
+    st.bx += Math.sin(performance.now() / 25) * 0.02; st.by = GY + 0.2
+    if (st.bT <= 0) { st.bSt = 'charge'; st.bDir = st.bFace; st.bT = 0.5 }
+  } else if (st.bSt === 'charge') {
+    const cs = BCSPD * (1 + st.wave * 0.1) * dt
+    st.bx += Math.sin(st.bDir) * cs; st.bz += Math.cos(st.bDir) * cs
+    st.by = GY + Math.abs(Math.sin(performance.now() / 80)) * 0.15
+    const hd = Math.sqrt((st.px - st.bx) ** 2 + ((st.py + 1) - (st.by + 1)) ** 2 + (st.pz - st.bz) ** 2)
+    if (hd < 2 && st.pHitCD <= 0) {
+      st.php -= BDMG + st.wave * 1.5; st.pHitCD = 0.7; sndBeastHit()
+      spawnP(st.px, st.py + 1.5, st.pz, 0xff4444, 12); st.shake = 0.2; st.shakeI = 0.15
+      if (st.php <= 0) { st.php = 0; st.over = true; showOL('戰敗', '你喺第 ' + st.wave + ' 波倒下了', false) }
     }
-    if (a.life <= 0 || Math.abs(a.mesh.position.x) > 20) { arrowGroup.remove(a.mesh); a.mesh.geometry.dispose(); arrows.splice(i, 1) }
+    if (st.bT <= 0) { st.bSt = 'retreat'; st.bT = 0.8 }
+  } else if (st.bSt === 'retreat') {
+    st.bx -= Math.sin(st.bDir) * BSPD * 0.5 * dt; st.bz -= Math.cos(st.bDir) * BSPD * 0.5 * dt
+    st.by = GY + Math.abs(Math.sin(performance.now() / 200)) * 0.4
+    if (st.bT <= 0) st.bSt = 'approach'
   }
+  const bd = Math.hypot(st.bx, st.bz); if (bd > 14) { st.bx = st.bx / bd * 14; st.bz = st.bz / bd * 14 }
 }
 
-function updateBeast(dt) {
-  if (state.gameOver || state.bhp <= 0 || !state.started) return
-  state.bTimer -= dt
-  if (state.bHitCD > 0) state.bHitCD -= dt
-  const dx = state.px - state.bx, dist = Math.abs(dx)
-  state.bFace = dx > 0 ? 1 : -1
+function nxtWave() { st.wave++; st.bmhp = 80 + st.wave * 18; st.bhp = st.bmhp; const a = Math.random() * Math.PI * 2; st.bx = Math.sin(a) * 13; st.bz = Math.cos(a) * 13; st.by = GY + 2; st.bSt = 'approach'; st.bT = 0; st.php = Math.min(st.pmhp, st.php + 25); sndWave(); uUI() }
 
-  if (state.bState === 'approach') {
-    state.bx += state.bFace * BEAST_SPD * dt
-    state.by = GROUND_Y + Math.abs(Math.sin(performance.now() / 250)) * 0.4
-    state.bz += (0 - state.bz) * 2 * dt
-    if (dist < 5) { state.bState = 'windup'; state.bTimer = 0.4 + Math.random() * 0.3 }
-  } else if (state.bState === 'windup') {
-    state.bx += Math.sin(performance.now() / 25) * 0.03
-    state.by = GROUND_Y + 0.2
-    if (state.bTimer <= 0) { state.bState = 'charge'; state.bChargeDir = state.bFace; state.bTimer = 0.5 }
-  } else if (state.bState === 'charge') {
-    state.bx += state.bChargeDir * BEAST_CHARGE_SPD * (1 + state.wave * 0.1) * dt
-    state.by = GROUND_Y + Math.abs(Math.sin(performance.now() / 80)) * 0.15
-    const hDx = state.px - state.bx, hDy = (state.py + 1) - (state.by + 1), hDz = 0 - state.bz
-    if (Math.sqrt(hDx * hDx + hDy * hDy + hDz * hDz) < 2 && state.pHitCD <= 0) {
-      state.php -= BEAST_DMG + state.wave * 1.5; state.pHitCD = 0.7; sndBeastHit()
-      spawnParticles3D(state.px, state.py + 1.5, 0, 0xff4444, 12)
-      state.shakeTimer = 0.2; state.shakeInt = 0.15
-      if (state.php <= 0) { state.php = 0; state.gameOver = true; showOverlay('戰敗', '你喺第 ' + state.wave + ' 波倒下了', false) }
-    }
-    if (state.bTimer <= 0) { state.bState = 'retreat'; state.bTimer = 0.8 }
-  } else if (state.bState === 'retreat') {
-    state.bx -= state.bChargeDir * BEAST_SPD * 0.5 * dt
-    state.by = GROUND_Y + Math.abs(Math.sin(performance.now() / 200)) * 0.4
-    state.bz += ((Math.random() - 0.5) * 3 - state.bz) * dt
-    if (state.bTimer <= 0) state.bState = 'approach'
-  }
-  state.bx = Math.max(-12, Math.min(15, state.bx))
-  state.bz = Math.max(-4, Math.min(4, state.bz))
-}
+function upParts(dt) { for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.mesh.position.x += p.vx * dt; p.mesh.position.y += p.vy * dt; p.mesh.position.z += p.vz * dt; p.vy -= 12 * dt; p.life -= dt; p.mesh.material.opacity = Math.max(0, p.life / 0.5); if (p.life <= 0) { partGrp.remove(p.mesh); parts.splice(i, 1) } } }
 
-function nextWave() {
-  state.wave++; state.bmaxhp = 80 + state.wave * 18; state.bhp = state.bmaxhp
-  state.bx = 14; state.by = GROUND_Y + 2; state.bz = (Math.random() - 0.5) * 4
-  state.bState = 'approach'; state.bTimer = 0
-  state.php = Math.min(state.pmaxhp, state.php + 25); sndWave(); updateUI()
-}
-
-function updateParticles3D(dt) {
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i]
-    p.mesh.position.x += p.vx * dt; p.mesh.position.y += p.vy * dt; p.mesh.position.z += p.vz * dt
-    p.vy -= 12 * dt; p.life -= dt
-    p.mesh.material.opacity = Math.max(0, p.life / 0.5)
-    if (p.life <= 0) { particleGroup.remove(p.mesh); p.mesh.geometry.dispose(); p.mesh.material.dispose(); particles.splice(i, 1) }
-  }
-}
-
-// ======================== ANIMATION ========================
+// ======================== ANIMATE ========================
 const clock = new THREE.Clock()
-
 function animate() {
   requestAnimationFrame(animate)
-  const rawDt = clock.getDelta()
-  const dt = Math.min(rawDt * state.slowMo, 0.05)
-  const t = performance.now()
+  const raw = clock.getDelta(), dt = Math.min(raw * st.slowMo, 0.05), t = performance.now()
 
-  updatePlayer(dt)
-  updateBeast(dt)
-  updateArrows(dt)
-  updateParticles3D(dt)
-  updateUI()
+  upPlayer(dt); upBeast(dt); upArrows(dt); upParts(dt); uUI()
 
-  // === SOLDIER ANIMATION ===
-  soldier.group.position.set(state.px, state.py, 0)
-  soldier.group.rotation.y = state.pFace > 0 ? 0 : Math.PI
+  // Soldier
+  soldier.group.position.set(st.px, st.py, st.pz)
+  soldier.group.rotation.y = st.pFace
+  const { mx, mz } = getMove(); const moving = Math.hypot(mx, mz) > 0.15
+  const wk = moving ? Math.sin(t / 120) * 0.4 : 0
+  soldier.lLeg.rotation.x = wk; soldier.rLeg.rotation.x = -wk; soldier.lArm.rotation.x = -wk * 0.3
+  soldier.group.position.y = st.py + (moving ? Math.abs(Math.sin(t / 120)) * 0.04 : 0)
+  if (st.atk) { const p = Math.sin(st.atkT * 20) * 0.8; soldier.spear.rotation.x = -0.15 - p; soldier.spear.position.z = 0.4 + p * 0.6; soldier.lArm.rotation.x = -p * 0.6 }
+  else { soldier.spear.rotation.x += (-0.15 - soldier.spear.rotation.x) * 0.1; soldier.spear.position.z += (0.4 - soldier.spear.position.z) * 0.1 }
+  soldier.group.traverse(c => { if (c.isMesh && c.material.emissive) c.material.emissive.setHex(st.pHitCD > 0.4 ? 0x881111 : 0x000000) })
 
-  // Walk cycle
-  const isMoving = isDown('left') || isDown('right')
-  const walkT = isMoving ? Math.sin(t / 120) * 0.4 : 0
-  soldier.leftLeg.rotation.x = walkT
-  soldier.rightLeg.rotation.x = -walkT
-  soldier.leftArm.rotation.x = -walkT * 0.3
-  // Body bob
-  soldier.group.position.y = state.py + (isMoving ? Math.abs(Math.sin(t / 120)) * 0.05 : 0)
-
-  // Attack animation
-  if (state.attacking) {
-    const prog = Math.sin(state.atkTimer * 20) * 0.8
-    soldier.spearGroup.rotation.x = -0.15 - prog
-    soldier.spearGroup.position.z = 0.3 + prog * 0.5
-    soldier.leftArm.rotation.x = -prog * 0.6
-  } else {
-    soldier.spearGroup.rotation.x += (-0.15 - soldier.spearGroup.rotation.x) * 0.1
-    soldier.spearGroup.position.z += (0.3 - soldier.spearGroup.position.z) * 0.1
-  }
-
-  // Hit flash
-  soldier.group.traverse(c => {
-    if (c.isMesh && c.material.emissive) {
-      c.material.emissive.setHex(state.pHitCD > 0.4 ? 0x881111 : 0x000000)
-    }
-  })
-
-  // === BEAST ANIMATION ===
-  beast.group.position.set(state.bx, state.by, state.bz)
-  beast.group.rotation.y = state.bFace > 0 ? -Math.PI / 2 : Math.PI / 2
-  beast.group.visible = state.bhp > 0
-
-  // Idle bob
-  const bBob = Math.sin(t / 300) * 0.15
-  beast.body.position.y = 1.2 + bBob
-  beast.headGroup.position.y = 1.9 + bBob
-
-  // Wing flap
-  const wingFlap = Math.sin(t / 150) * 0.4
-  beast.leftWing.rotation.z = wingFlap - 0.2
-  beast.rightWing.rotation.z = -wingFlap + 0.2
-
-  // Jaw animation when charging
-  if (state.bState === 'charge') {
-    beast.jaw.rotation.x = Math.sin(t / 60) * 0.3
-    beast.group.rotation.z = state.bChargeDir * -0.1
-    beast.leftClaw.rotation.x = 0.5 + Math.sin(t / 80) * 0.3
-    beast.rightClaw.rotation.x = 0.5 + Math.sin(t / 80 + 1) * 0.3
-  } else if (state.bState === 'windup') {
-    beast.jaw.rotation.x = Math.sin(t / 30) * 0.15
-    beast.group.rotation.z = Math.sin(t / 30) * 0.05
-  } else {
-    beast.jaw.rotation.x *= 0.9
-    beast.group.rotation.z *= 0.9
-    beast.leftClaw.rotation.x += (0.5 - beast.leftClaw.rotation.x) * 0.05
-    beast.rightClaw.rotation.x += (0.5 - beast.rightClaw.rotation.x) * 0.05
-  }
-  // Tail wag
+  // Beast
+  beast.group.position.set(st.bx, st.by, st.bz); beast.group.rotation.y = st.bFace; beast.group.visible = st.bhp > 0
+  const bb = Math.sin(t / 300) * 0.15; beast.body.position.y = 1.2 + bb; beast.head.position.y = 1.95 + bb
+  beast.lw.rotation.z = Math.sin(t / 150) * 0.4 - 0.2; beast.rw.rotation.z = -Math.sin(t / 150) * 0.4 + 0.2
+  if (st.bSt === 'charge') { beast.jaw.rotation.x = Math.sin(t / 60) * 0.3; beast.group.rotation.z = -0.1; beast.lC.rotation.x = 0.5 + Math.sin(t / 80) * 0.3; beast.rC.rotation.x = 0.5 + Math.sin(t / 80 + 1) * 0.3 }
+  else if (st.bSt === 'windup') { beast.jaw.rotation.x = Math.sin(t / 30) * 0.15; beast.group.rotation.z = Math.sin(t / 30) * 0.05 }
+  else { beast.jaw.rotation.x *= 0.9; beast.group.rotation.z *= 0.9; beast.lC.rotation.x += (0.5 - beast.lC.rotation.x) * 0.05; beast.rC.rotation.x += (0.5 - beast.rC.rotation.x) * 0.05 }
   beast.tail.rotation.z = Math.sin(t / 200) * 0.3
+  beast.group.traverse(c => { if (c.isMesh && c.material.emissive && c.material.emissiveIntensity < 1.5) c.material.emissive.setHex(st.bHitCD > 0.12 ? 0x881111 : 0x000000) })
 
-  // Hit flash
-  beast.group.traverse(c => {
-    if (c.isMesh && c.material.emissive && c.material.emissiveIntensity < 1.5) {
-      c.material.emissive.setHex(state.bHitCD > 0.12 ? 0x881111 : 0x000000)
-    }
-  })
-
-  // === CAMERA ===
-  const midX = (state.px + state.bx) * 0.5
-  const camTargetX = midX * 0.4
-  cameraTarget.set(camTargetX, 1.5, 0)
-  cameraBasePos.set(camTargetX, 5.5, 13)
-
-  if (state.shakeTimer > 0) {
-    state.shakeTimer -= rawDt
-    camera.position.set(
-      cameraBasePos.x + (Math.random() - 0.5) * state.shakeInt,
-      cameraBasePos.y + (Math.random() - 0.5) * state.shakeInt,
-      cameraBasePos.z
-    )
-  } else {
-    camera.position.lerp(cameraBasePos, 0.05)
-  }
-  camera.lookAt(cameraTarget)
-
-  // Bounce light follows action
-  bounceLight.position.set(midX, 0.5, 4)
+  // Camera follow
+  const mid = new THREE.Vector3((st.px + st.bx) * 0.5, 1.5, (st.pz + st.bz) * 0.5)
+  camTarget.lerp(mid, 0.05)
+  if (st.shake > 0) { st.shake -= raw; camera.position.x += (Math.random() - 0.5) * st.shakeI; camera.position.y += (Math.random() - 0.5) * st.shakeI }
+  updateCamera()
+  bounceLight.position.set(mid.x, 0.5, mid.z + 3)
 
   renderer.render(scene, camera)
 }
-
 animate()
