@@ -52,9 +52,9 @@
     .overlay-btns .primary{background:#cc6633}.overlay-btns .secondary{background:#555;font-size:15px}
 
     /* JOYSTICK */
-    #joystick-zone{position:fixed;left:0;bottom:0;width:45%;height:50%;z-index:14}
-    #joystick-base{position:absolute;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.15);display:none;pointer-events:none}
-    #joystick-knob{position:absolute;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,0.25);border:2px solid rgba(255,255,255,0.4);display:none;pointer-events:none}
+    #joystick-zone{position:fixed;left:0;top:0;width:50%;height:100%;z-index:14}
+    #joystick-base{position:fixed;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.15);display:none;pointer-events:none;z-index:15}
+    #joystick-knob{position:fixed;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,0.25);border:2px solid rgba(255,255,255,0.4);display:none;pointer-events:none;z-index:16}
 
     /* ACTION BUTTONS */
     #action-zone{position:fixed;right:10px;bottom:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:15;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
