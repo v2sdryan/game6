@@ -62,7 +62,8 @@ let camTouches = []
 renderer.domElement.addEventListener('touchstart', e => {
   if (e.touches.length === 2) {
     camTouches = [{ x: e.touches[0].clientX, y: e.touches[0].clientY }, { x: e.touches[1].clientX, y: e.touches[1].clientY }]
-    document.getElementById('cam-hint').classList.add('hidden')
+    const camHintEl = document.getElementById('cam-hint')
+    if (camHintEl) camHintEl.classList.add('hidden')
   }
 }, { passive: true })
 renderer.domElement.addEventListener('touchmove', e => {
